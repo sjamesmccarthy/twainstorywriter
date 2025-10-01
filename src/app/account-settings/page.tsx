@@ -22,7 +22,11 @@ import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
-import ArchiveIcon from "@mui/icons-material/Archive";
+import PlaylistAddCheckOutlinedIcon from "@mui/icons-material/PlaylistAddCheckOutlined";
+import RotateLeftOutlinedIcon from "@mui/icons-material/RotateLeftOutlined";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import TwainPageHeader from "@/components/TwainPageHeader";
 import TwainPageFooter from "@/components/TwainPageFooter";
 import TwainProfileMenu, { UserAvatar } from "@/components/TwainProfileMenu";
@@ -78,6 +82,11 @@ const AccountSettingsPage: React.FC = () => {
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminMessage, setAdminMessage] = useState("");
   const [adminError, setAdminError] = useState("");
+  const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<
+    "type" | "area" | "status" | "timestamp" | null
+  >(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   // Mock book and story data (in a real app, these would come from your data source)
   const [books] = useState<Book[]>([]);
@@ -129,6 +138,10 @@ const AccountSettingsPage: React.FC = () => {
 
   const handleAbout = () => {
     router.push("/about");
+  };
+
+  const handleHelp = () => {
+    router.push("/help");
   };
 
   const handleFeedback = () => {
@@ -300,6 +313,118 @@ const AccountSettingsPage: React.FC = () => {
     }
   };
 
+  const handleInProgressFeedback = async (feedbackId: string) => {
+    try {
+      setAdminLoading(true);
+      const response = await fetch("/api/feedback", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: feedbackId,
+          action: "in-progress",
+        }),
+      });
+
+      if (response.ok) {
+        setAdminMessage("Feedback marked as in progress");
+        loadFeedback();
+        setTimeout(() => setAdminMessage(""), 3000);
+      } else {
+        setAdminError("Failed to update feedback status");
+        setTimeout(() => setAdminError(""), 3000);
+      }
+    } catch (error) {
+      console.error("Error updating feedback status:", error);
+      setAdminError("Failed to update feedback status");
+      setTimeout(() => setAdminError(""), 3000);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const handleDeleteFeedback = async (feedbackId: string) => {
+    try {
+      setAdminLoading(true);
+      const response = await fetch("/api/feedback", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: feedbackId,
+        }),
+      });
+
+      if (response.ok) {
+        setAdminMessage("Feedback deleted successfully");
+        loadFeedback();
+        setTimeout(() => setAdminMessage(""), 3000);
+      } else {
+        setAdminError("Failed to delete feedback");
+        setTimeout(() => setAdminError(""), 3000);
+      }
+    } catch (error) {
+      console.error("Error deleting feedback:", error);
+      setAdminError("Failed to delete feedback");
+      setTimeout(() => setAdminError(""), 3000);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const handleFeedbackRowClick = (feedbackId: string) => {
+    setExpandedFeedback(expandedFeedback === feedbackId ? null : feedbackId);
+  };
+
+  const handleSort = (field: "type" | "area" | "status" | "timestamp") => {
+    if (sortField === field) {
+      // If clicking the same field, toggle direction
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // If clicking a new field, set it and default to ascending
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortedFeedbackItems = () => {
+    const openItems = feedbackItems.filter((item) => item.status === "open");
+
+    if (!sortField) return openItems;
+
+    return [...openItems].sort((a, b) => {
+      let aValue: string | Date;
+      let bValue: string | Date;
+
+      switch (sortField) {
+        case "type":
+          aValue = a.type;
+          bValue = b.type;
+          break;
+        case "area":
+          aValue = a.area;
+          bValue = b.area;
+          break;
+        case "status":
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        case "timestamp":
+          aValue = new Date(a.timestamp);
+          bValue = new Date(b.timestamp);
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) {
+        return sortDirection === "asc" ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortDirection === "asc" ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
   if (!session) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -324,6 +449,7 @@ const AccountSettingsPage: React.FC = () => {
           session={session}
           planType={planType}
           onAbout={handleAbout}
+          onHelp={handleHelp}
           onFeedback={handleFeedback}
           onLogout={handleLogout}
         />
@@ -780,169 +906,406 @@ const AccountSettingsPage: React.FC = () => {
                             sx={{ backgroundColor: "rgb(249, 250, 251)" }}
                           >
                             <TableCell
+                              onClick={() => handleSort("type")}
                               sx={{
                                 fontFamily: "'Rubik', sans-serif",
                                 fontWeight: 600,
+                                cursor: "pointer",
+                                userSelect: "none",
+                                "&:hover": {
+                                  backgroundColor: "rgba(0, 0, 0, 0.04)",
+                                },
+                                position: "relative",
+                                minWidth: "80px",
                               }}
                             >
-                              Type
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                Type
+                                <span
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  {sortField === "type" &&
+                                    (sortDirection === "asc" ? (
+                                      <ArrowUpwardIcon fontSize="small" />
+                                    ) : (
+                                      <ArrowDownwardIcon fontSize="small" />
+                                    ))}
+                                </span>
+                              </span>
                             </TableCell>
                             <TableCell
+                              onClick={() => handleSort("area")}
                               sx={{
                                 fontFamily: "'Rubik', sans-serif",
                                 fontWeight: 600,
+                                cursor: "pointer",
+                                userSelect: "none",
+                                "&:hover": {
+                                  backgroundColor: "rgba(0, 0, 0, 0.04)",
+                                },
+                                position: "relative",
+                                minWidth: "80px",
                               }}
                             >
-                              Area
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                Area
+                                <span
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  {sortField === "area" &&
+                                    (sortDirection === "asc" ? (
+                                      <ArrowUpwardIcon fontSize="small" />
+                                    ) : (
+                                      <ArrowDownwardIcon fontSize="small" />
+                                    ))}
+                                </span>
+                              </span>
                             </TableCell>
                             <TableCell
+                              onClick={() => handleSort("status")}
                               sx={{
                                 fontFamily: "'Rubik', sans-serif",
                                 fontWeight: 600,
+                                cursor: "pointer",
+                                userSelect: "none",
+                                "&:hover": {
+                                  backgroundColor: "rgba(0, 0, 0, 0.04)",
+                                },
+                                position: "relative",
+                                minWidth: "80px",
                               }}
                             >
-                              Subject
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                Status
+                                <span
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  {sortField === "status" &&
+                                    (sortDirection === "asc" ? (
+                                      <ArrowUpwardIcon fontSize="small" />
+                                    ) : (
+                                      <ArrowDownwardIcon fontSize="small" />
+                                    ))}
+                                </span>
+                              </span>
                             </TableCell>
                             <TableCell
+                              onClick={() => handleSort("timestamp")}
                               sx={{
                                 fontFamily: "'Rubik', sans-serif",
                                 fontWeight: 600,
+                                cursor: "pointer",
+                                userSelect: "none",
+                                "&:hover": {
+                                  backgroundColor: "rgba(0, 0, 0, 0.04)",
+                                },
+                                position: "relative",
+                                minWidth: "80px",
                               }}
                             >
-                              User
-                            </TableCell>
-                            <TableCell
-                              sx={{
-                                fontFamily: "'Rubik', sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              Status
-                            </TableCell>
-                            <TableCell
-                              sx={{
-                                fontFamily: "'Rubik', sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              Date
-                            </TableCell>
-                            <TableCell
-                              sx={{
-                                fontFamily: "'Rubik', sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              Actions
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                Date
+                                <span
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  {sortField === "timestamp" &&
+                                    (sortDirection === "asc" ? (
+                                      <ArrowUpwardIcon fontSize="small" />
+                                    ) : (
+                                      <ArrowDownwardIcon fontSize="small" />
+                                    ))}
+                                </span>
+                              </span>
                             </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {feedbackItems.map((feedback) => (
-                            <TableRow key={feedback.id}>
-                              <TableCell
-                                sx={{ fontFamily: "'Rubik', sans-serif" }}
+                          {getSortedFeedbackItems().map((feedback) => (
+                            <React.Fragment key={feedback.id}>
+                              <TableRow
+                                onClick={() =>
+                                  handleFeedbackRowClick(feedback.id)
+                                }
+                                sx={{
+                                  cursor: "pointer",
+                                  "&:hover": {
+                                    backgroundColor: "rgba(0, 0, 0, 0.04)",
+                                  },
+                                }}
                               >
-                                <Chip
-                                  label={feedback.type.replace("-", " ")}
-                                  size="small"
-                                  color={
-                                    feedback.type === "bug"
-                                      ? "error"
-                                      : feedback.type === "suggestion"
-                                      ? "success"
-                                      : "default"
-                                  }
-                                  sx={{
-                                    fontFamily: "'Rubik', sans-serif",
-                                    textTransform: "capitalize",
-                                  }}
-                                />
-                              </TableCell>
-                              <TableCell
-                                sx={{ fontFamily: "'Rubik', sans-serif" }}
-                              >
-                                {feedback.area.replace("-", " ")}
-                              </TableCell>
-                              <TableCell
-                                sx={{ fontFamily: "'Rubik', sans-serif" }}
-                              >
-                                <div>
-                                  <div className="font-medium">
-                                    {feedback.subject}
-                                  </div>
-                                  <div className="text-sm text-gray-500 truncate max-w-xs">
-                                    {feedback.description}
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell
-                                sx={{ fontFamily: "'Rubik', sans-serif" }}
-                              >
-                                <div>
-                                  <div className="font-medium">
-                                    {feedback.userName}
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    {feedback.userEmail}
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Chip
-                                  label={feedback.status}
-                                  size="small"
-                                  color={
-                                    feedback.status === "open"
-                                      ? "primary"
-                                      : "default"
-                                  }
+                                <TableCell
                                   sx={{ fontFamily: "'Rubik', sans-serif" }}
-                                />
-                              </TableCell>
-                              <TableCell
-                                sx={{ fontFamily: "'Rubik', sans-serif" }}
-                              >
-                                {new Date(
-                                  feedback.timestamp
-                                ).toLocaleDateString()}
-                              </TableCell>
-                              <TableCell>
-                                {feedback.status === "open" && (
-                                  <IconButton
-                                    onClick={() =>
-                                      handleArchiveFeedback(feedback.id)
-                                    }
-                                    disabled={adminLoading}
+                                >
+                                  <Chip
+                                    label={feedback.type.replace("-", " ")}
                                     size="small"
-                                    title="Archive feedback"
-                                    sx={{
-                                      color: "rgb(107, 114, 128)",
-                                      "&:hover": {
-                                        backgroundColor:
-                                          "rgba(107, 114, 128, 0.1)",
-                                      },
-                                    }}
-                                  >
-                                    <ArchiveIcon fontSize="small" />
-                                  </IconButton>
-                                )}
-                                {feedback.status !== "open" && (
-                                  <Typography
-                                    variant="caption"
+                                    color={
+                                      feedback.type === "bug"
+                                        ? "error"
+                                        : feedback.type === "suggestion"
+                                        ? "success"
+                                        : "default"
+                                    }
                                     sx={{
                                       fontFamily: "'Rubik', sans-serif",
-                                      color: "rgb(107, 114, 128)",
+                                      textTransform: "capitalize",
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell
+                                  sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                >
+                                  {feedback.area.replace("-", " ")}
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={feedback.status}
+                                    size="small"
+                                    color={
+                                      feedback.status === "open"
+                                        ? "primary"
+                                        : "default"
+                                    }
+                                    sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                  />
+                                </TableCell>
+                                <TableCell
+                                  sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                >
+                                  {new Date(
+                                    feedback.timestamp
+                                  ).toLocaleDateString()}
+                                </TableCell>
+                              </TableRow>
+                              {expandedFeedback === feedback.id && (
+                                <TableRow>
+                                  <TableCell
+                                    colSpan={4}
+                                    sx={{
+                                      backgroundColor: "rgb(249, 250, 251)",
+                                      borderTop: "1px solid rgb(229, 231, 235)",
                                     }}
                                   >
-                                    {feedback.archivedAt &&
-                                      `archived on ${new Date(
-                                        feedback.archivedAt
-                                      ).toLocaleDateString()}`}
-                                  </Typography>
-                                )}
-                              </TableCell>
-                            </TableRow>
+                                    <div className="p-4 space-y-3">
+                                      <div>
+                                        <Typography
+                                          variant="subtitle2"
+                                          sx={{
+                                            fontFamily: "'Rubik', sans-serif",
+                                            fontWeight: 600,
+                                            color: "rgb(31, 41, 55)",
+                                            mb: 1,
+                                          }}
+                                        >
+                                          User
+                                        </Typography>
+                                        <Typography
+                                          variant="body2"
+                                          sx={{
+                                            fontFamily: "'Rubik', sans-serif",
+                                            color: "rgb(55, 65, 81)",
+                                          }}
+                                        >
+                                          <div className="font-medium">
+                                            {feedback.userName}
+                                          </div>
+                                          <div className="text-sm text-gray-500">
+                                            {feedback.userEmail}
+                                          </div>
+                                        </Typography>
+                                      </div>
+                                      <div>
+                                        <Typography
+                                          variant="subtitle2"
+                                          sx={{
+                                            fontFamily: "'Rubik', sans-serif",
+                                            fontWeight: 600,
+                                            color: "rgb(31, 41, 55)",
+                                            mb: 1,
+                                          }}
+                                        >
+                                          Subject
+                                        </Typography>
+                                        <Typography
+                                          variant="body2"
+                                          sx={{
+                                            fontFamily: "'Rubik', sans-serif",
+                                            color: "rgb(55, 65, 81)",
+                                          }}
+                                        >
+                                          {feedback.subject}
+                                        </Typography>
+                                      </div>
+                                      <div>
+                                        <Typography
+                                          variant="subtitle2"
+                                          sx={{
+                                            fontFamily: "'Rubik', sans-serif",
+                                            fontWeight: 600,
+                                            color: "rgb(31, 41, 55)",
+                                            mb: 1,
+                                          }}
+                                        >
+                                          Description
+                                        </Typography>
+                                        <Typography
+                                          variant="body2"
+                                          sx={{
+                                            fontFamily: "'Rubik', sans-serif",
+                                            color: "rgb(55, 65, 81)",
+                                            whiteSpace: "pre-wrap",
+                                          }}
+                                        >
+                                          {feedback.description}
+                                        </Typography>
+                                      </div>
+                                      {feedback.status === "open" && (
+                                        <div className="flex justify-end items-center gap-2 mt-3">
+                                          <Button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleInProgressFeedback(
+                                                feedback.id
+                                              );
+                                            }}
+                                            disabled={adminLoading}
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={
+                                              <RotateLeftOutlinedIcon />
+                                            }
+                                            sx={{
+                                              textTransform: "none",
+                                              fontFamily: "'Rubik', sans-serif",
+                                              color: "rgb(249, 115, 22)",
+                                              borderColor: "rgb(249, 115, 22)",
+                                              "&:hover": {
+                                                borderColor: "rgb(234, 88, 12)",
+                                                backgroundColor:
+                                                  "rgba(249, 115, 22, 0.1)",
+                                              },
+                                            }}
+                                          >
+                                            In Progress
+                                          </Button>
+                                          <Button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleArchiveFeedback(
+                                                feedback.id
+                                              );
+                                            }}
+                                            disabled={adminLoading}
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={
+                                              <PlaylistAddCheckOutlinedIcon />
+                                            }
+                                            sx={{
+                                              textTransform: "none",
+                                              fontFamily: "'Rubik', sans-serif",
+                                              color: "rgb(34, 197, 94)",
+                                              borderColor: "rgb(34, 197, 94)",
+                                              "&:hover": {
+                                                borderColor: "rgb(22, 163, 74)",
+                                                backgroundColor:
+                                                  "rgba(34, 197, 94, 0.1)",
+                                              },
+                                            }}
+                                          >
+                                            Resolved
+                                          </Button>
+                                          <IconButton
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteFeedback(feedback.id);
+                                            }}
+                                            disabled={adminLoading}
+                                            size="small"
+                                            sx={{
+                                              color: "rgb(239, 68, 68)",
+                                              "&:hover": {
+                                                backgroundColor:
+                                                  "rgba(239, 68, 68, 0.1)",
+                                              },
+                                            }}
+                                          >
+                                            <DeleteOutlineOutlinedIcon fontSize="small" />
+                                          </IconButton>
+                                        </div>
+                                      )}
+                                      {feedback.status !== "open" &&
+                                        feedback.archivedAt && (
+                                          <div className="text-right">
+                                            <Typography
+                                              variant="caption"
+                                              sx={{
+                                                fontFamily:
+                                                  "'Rubik', sans-serif",
+                                                color: "rgb(107, 114, 128)",
+                                                fontStyle: "italic",
+                                              }}
+                                            >
+                                              Resolved on{" "}
+                                              {new Date(
+                                                feedback.archivedAt
+                                              ).toLocaleDateString()}
+                                            </Typography>
+                                          </div>
+                                        )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
                           ))}
                         </TableBody>
                       </Table>

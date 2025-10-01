@@ -30,16 +30,22 @@ const TwainPageFooter: React.FC<TwainPageFooterProps> = ({
         color="text.secondary"
         sx={{ fontFamily: "'Rubik', sans-serif", textAlign: "center" }}
       >
-        © {new Date().getFullYear()} Twain Story Writer. All rights reserved.
+        © {new Date().getFullYear()} Twain Story Writer. All Rights Reserved.
         <br />
         You are using a BETA version of this software -{" "}
         <span
           onClick={() => router.push("/feedback")}
           className="underline text-blue-600 hover:text-blue-800 cursor-pointer"
         >
-          Feedback
+          Feedback{" "}
         </span>
-        .
+        -{" "}
+        <span
+          onClick={() => router.push("/terms")}
+          className="underline text-blue-600 hover:text-blue-800 cursor-pointer"
+        >
+          Terms and Conditions
+        </span>
       </Typography>
     </footer>
   );

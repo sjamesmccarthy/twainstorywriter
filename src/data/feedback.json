@@ -32,5 +32,38 @@
     "userEmail": "hikerbikerwriter@gmail.com",
     "userName": "James M",
     "status": "open"
+  },
+  {
+    "id": "1759348496614",
+    "timestamp": "2025-10-01T19:54:56.615Z",
+    "type": "suggestion",
+    "area": "login-process",
+    "subject": "Allow me to login with multiple accounts",
+    "description": "Allow me to login with multiple accounts",
+    "userEmail": "hikerbikerwriter@gmail.com",
+    "userName": "James M",
+    "status": "open"
+  },
+  {
+    "id": "1759348515262",
+    "timestamp": "2025-10-01T19:55:15.262Z",
+    "type": "unexpected-behavior",
+    "area": "outline",
+    "subject": "Disappeared",
+    "description": "My content disappeared.",
+    "userEmail": "hikerbikerwriter@gmail.com",
+    "userName": "James M",
+    "status": "open"
+  },
+  {
+    "id": "1759348536803",
+    "timestamp": "2025-10-01T19:55:36.803Z",
+    "type": "other",
+    "area": "exporting-data",
+    "subject": "Add Word",
+    "description": "Need to ad support for DocX files",
+    "userEmail": "hikerbikerwriter@gmail.com",
+    "userName": "James M",
+    "status": "open"
   }
 ]

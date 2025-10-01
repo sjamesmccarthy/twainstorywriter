@@ -166,6 +166,7 @@ interface TwainProfileMenuProps {
   planType: "freelance" | "professional";
   onAccountSettings?: () => void;
   onAbout?: () => void;
+  onHelp?: () => void;
   onFeedback?: () => void;
   onLogout: () => void;
   additionalClasses?: string;
@@ -177,6 +178,7 @@ const TwainProfileMenu: React.FC<TwainProfileMenuProps> = ({
   planType,
   onAccountSettings,
   onAbout,
+  onHelp,
   onFeedback,
   onLogout,
   additionalClasses = "",
@@ -200,6 +202,11 @@ const TwainProfileMenu: React.FC<TwainProfileMenuProps> = ({
   const handleAbout = () => {
     handleMenuClose();
     onAbout?.();
+  };
+
+  const handleHelp = () => {
+    handleMenuClose();
+    onHelp?.();
   };
 
   const handleFeedback = () => {
@@ -241,6 +248,7 @@ const TwainProfileMenu: React.FC<TwainProfileMenuProps> = ({
           <MenuItem onClick={handleAccountSettings}>Account Settings</MenuItem>
         )}
         {onAbout && <MenuItem onClick={handleAbout}>About</MenuItem>}
+        {onHelp && <MenuItem onClick={handleHelp}>Help</MenuItem>}
         {onFeedback && <MenuItem onClick={handleFeedback}>Feedback</MenuItem>}
         <MenuItem onClick={handleLogout}>Sign Out</MenuItem>
       </Menu>

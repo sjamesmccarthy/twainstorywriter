@@ -3,6 +3,7 @@
 import React from "react";
 import { Typography, IconButton } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import Image from "next/image";
 
 interface TwainPageHeaderProps {
   title: string;
@@ -24,6 +25,41 @@ const TwainPageHeader: React.FC<TwainPageHeaderProps> = ({
         className="h-[300px] flex flex-col justify-center items-center text-white relative"
         style={{ backgroundColor: "rgb(38, 52, 63)" }}
       >
+        <div
+          style={{
+            position: "relative",
+            display: "inline-block",
+            marginBottom: "16px",
+          }}
+        >
+          <Image
+            src="/images/twain-logo.png"
+            alt="Twain Logo"
+            width={120}
+            height={120}
+            style={{
+              filter: "invert(1) brightness(100%)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: "-16px",
+              right: "-12px",
+              backgroundColor: "#ff4757",
+              color: "white",
+              fontSize: "14px",
+              fontWeight: "bold",
+              padding: "4px 8px",
+              borderRadius: "6px",
+              fontFamily: "'Rubik', sans-serif",
+              border: "1px solid white",
+              zIndex: 10,
+            }}
+          >
+            BETA
+          </div>
+        </div>
         <Typography
           variant="h4"
           sx={{

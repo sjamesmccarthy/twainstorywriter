@@ -447,6 +447,10 @@ const TwainStoryBuilder: React.FC = () => {
     router.push("/about");
   };
 
+  const handleHelp = () => {
+    router.push("/help");
+  };
+
   const handleFeedback = () => {
     router.push("/feedback");
   };
@@ -962,6 +966,7 @@ const TwainStoryBuilder: React.FC = () => {
               planType={planType}
               onAccountSettings={handleAccountSettings}
               onAbout={handleAbout}
+              onHelp={handleHelp}
               onFeedback={handleFeedback}
               onLogout={handleLogout}
             />
@@ -1041,7 +1046,7 @@ const TwainStoryBuilder: React.FC = () => {
           {/* Main content area - Book Management Form */}
           <main className="flex-1 bg-gray-100 p-4 lg:p-8">
             <div className="w-[95%] lg:w-[60%] mx-auto">
-              <div className="">
+              <div className="bg-white rounded-lg shadow-sm p-6">
                 <div className="space-y-6">
                   {/* Book Cover and Title Edit */}
                   <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-start">
@@ -2144,6 +2149,29 @@ const TwainStoryBuilder: React.FC = () => {
 
                   {/* Action Buttons */}
                   <div className="flex flex-col sm:flex-row gap-4 pt-6">
+                    <Button
+                      onClick={handleDeleteBook}
+                      variant="contained"
+                      startIcon={<DeleteForeverOutlinedIcon />}
+                      sx={{
+                        flex: 1,
+                        textTransform: "none",
+                        fontFamily: "'Rubik', sans-serif",
+                        py: 1.5,
+                        backgroundColor: "white",
+                        color: "rgb(254, 226, 226)",
+                        border: "1px solid rgb(254, 226, 226)",
+                        boxShadow: "none",
+                        "&:hover": {
+                          backgroundColor: "rgb(248, 113, 113)",
+                          color: "white",
+                          borderColor: "rgb(239, 68, 68)",
+                          boxShadow: "none",
+                        },
+                      }}
+                    >
+                      Delete Permanently
+                    </Button>
                     <div className="relative flex-1">
                       <Button
                         onClick={
@@ -2195,33 +2223,13 @@ const TwainStoryBuilder: React.FC = () => {
                       )}
                     </div>
                     <Button
-                      onClick={handleDeleteBook}
-                      variant="outlined"
-                      startIcon={<DeleteForeverOutlinedIcon />}
-                      sx={{
-                        flex: 1,
-                        textTransform: "none",
-                        fontFamily: "'Rubik', sans-serif",
-                        py: 1.5,
-                        borderColor: "rgb(248, 113, 113)",
-                        color: "rgb(248, 113, 113)",
-                        "&:hover": {
-                          borderColor: "rgb(239, 68, 68)",
-                          backgroundColor: "rgba(248, 113, 113, 0.1)",
-                          color: "rgb(239, 68, 68)",
-                        },
-                      }}
-                    >
-                      Delete Permanently
-                    </Button>
-                    <Button
                       onClick={handleSaveBook}
                       variant="contained"
                       disabled={
                         !managedBookTitle.trim() || !managedBookAuthor.trim()
                       }
                       sx={{
-                        flex: 1,
+                        minWidth: "120px",
                         backgroundColor: "rgb(19, 135, 194)",
                         textTransform: "none",
                         fontFamily: "'Rubik', sans-serif",
@@ -2236,7 +2244,7 @@ const TwainStoryBuilder: React.FC = () => {
                         },
                       }}
                     >
-                      Save Changes
+                      Save
                     </Button>
                   </div>
                 </div>
@@ -2611,6 +2619,7 @@ const TwainStoryBuilder: React.FC = () => {
             planType={planType}
             onAccountSettings={handleAccountSettings}
             onAbout={handleAbout}
+            onHelp={handleHelp}
             onFeedback={handleFeedback}
             onLogout={handleLogout}
             additionalClasses="z-10"
