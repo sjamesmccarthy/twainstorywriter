@@ -42,12 +42,16 @@ export default function handler(req, res) {
     return;
   }
 
-  // Handle PUT request - Archive feedback
+  // Handle PUT request - Update feedback status
   if (req.method === "PUT") {
     try {
       const { action, feedbackId } = req.body;
 
-      if (action !== "archive" || !feedbackId) {
+      if (
+        !action ||
+        !feedbackId ||
+        (action !== "archive" && action !== "in-progress")
+      ) {
         return res.status(400).json({ message: "Invalid request" });
       }
 
@@ -60,15 +64,53 @@ export default function handler(req, res) {
         return res.status(404).json({ message: "Feedback not found" });
       }
 
-      // Update the feedback status to archived
-      feedbackData[feedbackIndex].status = "archived";
-      feedbackData[feedbackIndex].archivedAt = new Date().toISOString();
+      // Update the feedback status
+      if (action === "archive") {
+        feedbackData[feedbackIndex].status = "archived";
+        feedbackData[feedbackIndex].archivedAt = new Date().toISOString();
+      } else if (action === "in-progress") {
+        feedbackData[feedbackIndex].status = "in-progress";
+        feedbackData[feedbackIndex].inProgressAt = new Date().toISOString();
+      }
 
       writeFeedbackData(feedbackData);
 
-      res.status(200).json({ message: "Feedback archived successfully" });
+      const message =
+        action === "archive"
+          ? "Feedback archived successfully"
+          : "Feedback status updated to in-progress";
+      res.status(200).json({ message });
     } catch (error) {
-      console.error("Error archiving feedback:", error);
+      console.error("Error updating feedback:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+    return;
+  }
+
+  // Handle DELETE request - Delete feedback
+  if (req.method === "DELETE") {
+    try {
+      const { id } = req.body;
+
+      if (!id) {
+        return res.status(400).json({ message: "Feedback ID is required" });
+      }
+
+      const feedbackData = readFeedbackData();
+      const feedbackIndex = feedbackData.findIndex((item) => item.id === id);
+
+      if (feedbackIndex === -1) {
+        return res.status(404).json({ message: "Feedback not found" });
+      }
+
+      // Remove the feedback item from the array
+      feedbackData.splice(feedbackIndex, 1);
+
+      writeFeedbackData(feedbackData);
+
+      res.status(200).json({ message: "Feedback deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting feedback:", error);
       res.status(500).json({ message: "Internal server error" });
     }
     return;

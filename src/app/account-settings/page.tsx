@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -63,8 +63,9 @@ interface FeedbackItem {
   description: string;
   userEmail: string;
   userName: string;
-  status: "open" | "archived";
+  status: "open" | "in-progress" | "archived";
   archivedAt?: string;
+  inProgressAt?: string;
 }
 
 interface Book {
@@ -191,9 +192,12 @@ const AccountSettingsPage: React.FC = () => {
     itemSummary: string[];
   } | null>(null);
 
-  // Mock book and story data (in a real app, these would come from your data source)
-  const [books] = useState<Book[]>([]);
-  const [quickStories] = useState<Book[]>([]);
+  // Real statistics data
+  const [realStats, setRealStats] = useState({
+    totalBooks: 0,
+    totalQuickStories: 0,
+    totalWords: 0,
+  });
 
   // Initialize about author from local storage (since it's not in preferences yet)
   useEffect(() => {
@@ -234,6 +238,202 @@ const AccountSettingsPage: React.FC = () => {
     }
   }, [isCurrentUserAdmin]);
 
+  // Calculate real writing statistics
+  const calculateWritingStats = useCallback(() => {
+    if (!session?.user?.email) return;
+
+    const userEmail = session.user.email;
+
+    // Get books data
+    const booksStorageKey = `twain-story-builder-books-${userEmail}`;
+    const booksData = localStorage.getItem(booksStorageKey);
+    const realBooks = booksData ? JSON.parse(booksData) : [];
+
+    // Get quick stories data
+    const quickStoriesKey = `twain-story-builder-quickstories-${userEmail}`;
+    const quickStoriesData = localStorage.getItem(quickStoriesKey);
+    const realQuickStories = quickStoriesData
+      ? JSON.parse(quickStoriesData)
+      : [];
+
+    console.log("Books data:", realBooks);
+    console.log("Quick stories data:", realQuickStories);
+
+    // Helper function to get storage key (matching the export function)
+    const getStorageKey = (
+      type: string,
+      bookId: string,
+      userEmail: string,
+      isQuickStory = false
+    ) => {
+      const prefix = isQuickStory ? "twain-quickstory" : "twain-book";
+      return `${prefix}-${type}-${bookId}-${userEmail}`;
+    };
+
+    // Calculate total words from all content
+    let totalWords = 0;
+
+    // Count words from books (ideas, characters, outlines, stories, chapters)
+    realBooks.forEach((book: Record<string, unknown>) => {
+      console.log("Processing book:", book.title);
+
+      // Ideas
+      const ideasKey = getStorageKey("ideas", book.id as string, userEmail);
+      const ideasData = localStorage.getItem(ideasKey);
+      if (ideasData) {
+        const ideas = JSON.parse(ideasData);
+        if (Array.isArray(ideas)) {
+          ideas.forEach((idea: Record<string, unknown>) => {
+            if (typeof idea.notes === "string") {
+              console.log(`Raw idea notes for "${idea.title}":`, idea.notes);
+              const plainText = deltaToPlainText(idea.notes);
+              console.log(`Extracted plain text:`, plainText);
+              const words = plainText
+                .split(/\s+/)
+                .filter((word: string) => word.length > 0);
+              console.log(`Words array:`, words);
+              console.log(`Idea "${idea.title}" has ${words.length} words`);
+              totalWords += words.length;
+            }
+          });
+        }
+      }
+
+      // Characters
+      const charactersKey = getStorageKey(
+        "characters",
+        book.id as string,
+        userEmail
+      );
+      const charactersData = localStorage.getItem(charactersKey);
+      if (charactersData) {
+        const characters = JSON.parse(charactersData);
+        if (Array.isArray(characters)) {
+          characters.forEach((character: Record<string, unknown>) => {
+            if (typeof character.notes === "string") {
+              console.log(
+                `Raw character notes for "${character.title}":`,
+                character.notes
+              );
+              const plainText = deltaToPlainText(character.notes);
+              console.log(`Extracted plain text:`, plainText);
+              const words = plainText
+                .split(/\s+/)
+                .filter((word: string) => word.length > 0);
+              console.log(`Words array:`, words);
+              console.log(
+                `Character "${character.title}" has ${words.length} words`
+              );
+              totalWords += words.length;
+            }
+          });
+        }
+      }
+
+      // Outlines
+      const outlinesKey = getStorageKey(
+        "outlines",
+        book.id as string,
+        userEmail
+      );
+      const outlinesData = localStorage.getItem(outlinesKey);
+      if (outlinesData) {
+        const outlines = JSON.parse(outlinesData);
+        if (Array.isArray(outlines)) {
+          outlines.forEach((outline: Record<string, unknown>) => {
+            if (typeof outline.notes === "string") {
+              const plainText = deltaToPlainText(outline.notes);
+              const words = plainText
+                .split(/\s+/)
+                .filter((word: string) => word.length > 0).length;
+              console.log(`Outline "${outline.title}" has ${words} words`);
+              totalWords += words;
+            }
+          });
+        }
+      }
+
+      // Stories
+      const storiesKey = getStorageKey("stories", book.id as string, userEmail);
+      const storiesData = localStorage.getItem(storiesKey);
+      if (storiesData) {
+        const stories = JSON.parse(storiesData);
+        if (Array.isArray(stories)) {
+          stories.forEach((story: Record<string, unknown>) => {
+            if (typeof story.content === "string") {
+              const plainText = deltaToPlainText(story.content);
+              const words = plainText
+                .split(/\s+/)
+                .filter((word: string) => word.length > 0).length;
+              console.log(`Story "${story.title}" has ${words} words`);
+              totalWords += words;
+            }
+          });
+        }
+      }
+
+      // Chapters
+      const chaptersKey = getStorageKey(
+        "chapters",
+        book.id as string,
+        userEmail
+      );
+      const chaptersData = localStorage.getItem(chaptersKey);
+      if (chaptersData) {
+        const chapters = JSON.parse(chaptersData);
+        if (Array.isArray(chapters)) {
+          chapters.forEach((chapter: Record<string, unknown>) => {
+            if (typeof chapter.content === "string") {
+              const plainText = deltaToPlainText(chapter.content);
+              const words = plainText
+                .split(/\s+/)
+                .filter((word: string) => word.length > 0).length;
+              console.log(`Chapter "${chapter.title}" has ${words} words`);
+              totalWords += words;
+            }
+          });
+        }
+      }
+    });
+
+    // Count words from quick stories
+    realQuickStories.forEach((story: Record<string, unknown>) => {
+      const storyKey = getStorageKey(
+        "stories",
+        story.id as string,
+        userEmail,
+        true
+      );
+      const storyData = localStorage.getItem(storyKey);
+      if (storyData) {
+        const storyContent = JSON.parse(storyData);
+        if (storyContent && typeof storyContent.content === "string") {
+          const plainText = deltaToPlainText(storyContent.content);
+          const words = plainText
+            .split(/\s+/)
+            .filter((word: string) => word.length > 0).length;
+          console.log(`Quick story "${story.title}" has ${words} words`);
+          totalWords += words;
+        }
+      }
+    });
+
+    console.log("Total words calculated:", totalWords);
+
+    setRealStats({
+      totalBooks: realBooks.length,
+      totalQuickStories: realQuickStories.length,
+      totalWords: totalWords,
+    });
+  }, [session?.user?.email]);
+
+  // Load writing statistics when session is available
+  useEffect(() => {
+    if (session?.user?.email) {
+      calculateWritingStats();
+    }
+  }, [session?.user?.email, calculateWritingStats]);
+
   // Profile menu handlers
   const handleBackToBookshelf = () => {
     router.push("/bookshelf");
@@ -252,7 +452,7 @@ const AccountSettingsPage: React.FC = () => {
   };
 
   const handleLogout = () => {
-    signOut();
+    signOut({ callbackUrl: "/" });
   };
 
   // About author handling
@@ -785,7 +985,7 @@ For questions or support, please contact the Twain Story Writer team.
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: feedbackId,
+          feedbackId: feedbackId,
           action: "archive",
         }),
       });
@@ -814,7 +1014,7 @@ For questions or support, please contact the Twain Story Writer team.
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: feedbackId,
+          feedbackId: feedbackId,
           action: "in-progress",
         }),
       });
@@ -880,11 +1080,13 @@ For questions or support, please contact the Twain Story Writer team.
   };
 
   const getSortedFeedbackItems = () => {
-    const openItems = feedbackItems.filter((item) => item.status === "open");
+    const activeItems = feedbackItems.filter(
+      (item) => item.status === "open" || item.status === "in-progress"
+    );
 
-    if (!sortField) return openItems;
+    if (!sortField) return activeItems;
 
-    return [...openItems].sort((a, b) => {
+    return [...activeItems].sort((a, b) => {
       let aValue: string | Date;
       let bValue: string | Date;
 
@@ -1365,10 +1567,13 @@ For questions or support, please contact the Twain Story Writer team.
                     >
                       User Feedback (
                       {
-                        feedbackItems.filter((item) => item.status === "open")
-                          .length
+                        feedbackItems.filter(
+                          (item) =>
+                            item.status === "open" ||
+                            item.status === "in-progress"
+                        ).length
                       }{" "}
-                      open)
+                      active)
                     </Typography>
                     <Button
                       onClick={loadFeedback}
@@ -1648,12 +1853,12 @@ For questions or support, please contact the Twain Story Writer team.
                                             color: "rgb(55, 65, 81)",
                                           }}
                                         >
-                                          <div className="font-medium">
+                                          <span className="font-medium block">
                                             {feedback.userName}
-                                          </div>
-                                          <div className="text-sm text-gray-500">
+                                          </span>
+                                          <span className="text-sm text-gray-500 block">
                                             {feedback.userEmail}
-                                          </div>
+                                          </span>
                                         </Typography>
                                       </div>
                                       <div>
@@ -1701,35 +1906,41 @@ For questions or support, please contact the Twain Story Writer team.
                                           {feedback.description}
                                         </Typography>
                                       </div>
-                                      {feedback.status === "open" && (
+                                      {(feedback.status === "open" ||
+                                        feedback.status === "in-progress") && (
                                         <div className="flex justify-end items-center gap-2 mt-3">
-                                          <Button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleInProgressFeedback(
-                                                feedback.id
-                                              );
-                                            }}
-                                            disabled={adminLoading}
-                                            size="small"
-                                            variant="outlined"
-                                            startIcon={
-                                              <RotateLeftOutlinedIcon />
-                                            }
-                                            sx={{
-                                              textTransform: "none",
-                                              fontFamily: "'Rubik', sans-serif",
-                                              color: "rgb(249, 115, 22)",
-                                              borderColor: "rgb(249, 115, 22)",
-                                              "&:hover": {
-                                                borderColor: "rgb(234, 88, 12)",
-                                                backgroundColor:
-                                                  "rgba(249, 115, 22, 0.1)",
-                                              },
-                                            }}
-                                          >
-                                            In Progress
-                                          </Button>
+                                          {feedback.status === "open" && (
+                                            <Button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleInProgressFeedback(
+                                                  feedback.id
+                                                );
+                                              }}
+                                              disabled={adminLoading}
+                                              size="small"
+                                              variant="outlined"
+                                              startIcon={
+                                                <RotateLeftOutlinedIcon />
+                                              }
+                                              sx={{
+                                                textTransform: "none",
+                                                fontFamily:
+                                                  "'Rubik', sans-serif",
+                                                color: "rgb(249, 115, 22)",
+                                                borderColor:
+                                                  "rgb(249, 115, 22)",
+                                                "&:hover": {
+                                                  borderColor:
+                                                    "rgb(234, 88, 12)",
+                                                  backgroundColor:
+                                                    "rgba(249, 115, 22, 0.1)",
+                                                },
+                                              }}
+                                            >
+                                              In Progress
+                                            </Button>
+                                          )}
                                           <Button
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -1776,7 +1987,7 @@ For questions or support, please contact the Twain Story Writer team.
                                           </IconButton>
                                         </div>
                                       )}
-                                      {feedback.status !== "open" &&
+                                      {feedback.status === "archived" &&
                                         feedback.archivedAt && (
                                           <div className="text-right">
                                             <Typography
@@ -1844,7 +2055,7 @@ For questions or support, please contact the Twain Story Writer team.
                       order: { xs: 2, sm: 1 },
                     }}
                   >
-                    {books.length}
+                    {realStats.totalBooks}
                   </Typography>
                 </div>
 
@@ -1857,7 +2068,7 @@ For questions or support, please contact the Twain Story Writer team.
                       order: { xs: 1, sm: 2 },
                     }}
                   >
-                    Stories
+                    Quick Stories
                   </Typography>
                   <Typography
                     variant="h4"
@@ -1868,7 +2079,7 @@ For questions or support, please contact the Twain Story Writer team.
                       order: { xs: 2, sm: 1 },
                     }}
                   >
-                    {quickStories.length}
+                    {realStats.totalQuickStories}
                   </Typography>
                 </div>
 
@@ -1892,11 +2103,7 @@ For questions or support, please contact the Twain Story Writer team.
                       order: { xs: 2, sm: 1 },
                     }}
                   >
-                    {books.reduce((total, book) => total + book.wordCount, 0) +
-                      quickStories.reduce(
-                        (total, story) => total + story.wordCount,
-                        0
-                      )}
+                    {realStats.totalWords.toLocaleString()}
                   </Typography>
                 </div>
               </div>

@@ -1,6 +1,5 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
 import {
   Container,
   Paper,
@@ -64,7 +63,7 @@ export default function SignupPage() {
   };
 
   const handleBackToSignIn = () => {
-    signIn("google");
+    router.push("/");
   };
 
   return (
@@ -92,43 +91,45 @@ export default function SignupPage() {
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <TextField
-            fullWidth
-            label="Email Address"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            margin="normal"
-            disabled={!!router.query.email}
-            helperText={
-              router.query.email
-                ? "This email was detected from your Google sign-in attempt"
-                : "Please enter your Gmail address"
-            }
-          />
+        {!message && (
+          <form onSubmit={handleSubmit}>
+            <TextField
+              fullWidth
+              label="Email Address"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              margin="normal"
+              disabled={!!router.query.email}
+              helperText={
+                router.query.email
+                  ? "This email was detected from your Google sign-in attempt"
+                  : "Please enter your Gmail address"
+              }
+            />
 
-          <TextField
-            fullWidth
-            label="Full Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            margin="normal"
-            helperText="Please enter your full name as you'd like it to appear in the application"
-          />
+            <TextField
+              fullWidth
+              label="Full Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              margin="normal"
+              helperText="Please enter your full name as you'd like it to appear in the application"
+            />
 
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3, mb: 2 }}
-            disabled={loading}
-          >
-            {loading ? "Submitting Request..." : "Request Access"}
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              sx={{ mt: 3, mb: 2 }}
+              disabled={loading}
+            >
+              {loading ? "Submitting Request..." : "Request Access"}
+            </Button>
+          </form>
+        )}
 
         <Divider sx={{ my: 3 }} />
 
