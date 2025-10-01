@@ -925,7 +925,10 @@ const TwainStoryBuilder: React.FC = () => {
 
   const handleWriteBook = (book: Book) => {
     setSelectedBook(book);
-    setCurrentView("write");
+    // Store book data for the story writer page
+    localStorage.setItem("currentSelectedBook", JSON.stringify(book));
+    localStorage.setItem("isQuickStoryMode", "false");
+    router.push("/storywriter");
   };
 
   if (status === "loading") {
@@ -3408,7 +3411,16 @@ const TwainStoryBuilder: React.FC = () => {
                               onClick={() => {
                                 setSelectedBook(storyData);
                                 setIsQuickStoryMode(true);
-                                setCurrentView("write");
+                                // Store book data for the story writer page
+                                localStorage.setItem(
+                                  "currentSelectedBook",
+                                  JSON.stringify(storyData)
+                                );
+                                localStorage.setItem(
+                                  "isQuickStoryMode",
+                                  "true"
+                                );
+                                router.push("/storywriter");
                               }}
                               sx={{
                                 fontSize: 32,

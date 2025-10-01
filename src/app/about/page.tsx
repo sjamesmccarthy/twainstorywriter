@@ -4,6 +4,15 @@ import React from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Typography, Paper, Box } from "@mui/material";
+import {
+  MenuBookOutlined,
+  EditOutlined,
+  PeopleOutlined,
+  ListAltOutlined,
+  LightbulbOutlined,
+  BarChartOutlined,
+  FileDownloadOutlined,
+} from "@mui/icons-material";
 import TwainPageHeader from "@/components/TwainPageHeader";
 import TwainPageFooter from "@/components/TwainPageFooter";
 import TwainProfileMenu from "@/components/TwainProfileMenu";
@@ -15,7 +24,7 @@ const AboutPage: React.FC = () => {
   const { planType } = useUserPreferences();
 
   const handleBackClick = () => {
-    router.push("/twain-story-builder");
+    router.push("/bookshelf");
   };
 
   const handleAccountSettings = () => {
@@ -24,6 +33,10 @@ const AboutPage: React.FC = () => {
 
   const handleFeedback = () => {
     router.push("/feedback");
+  };
+
+  const handleHelp = () => {
+    router.push("/help");
   };
 
   const handleLogout = () => {
@@ -48,6 +61,7 @@ const AboutPage: React.FC = () => {
             planType={planType}
             onAccountSettings={handleAccountSettings}
             onFeedback={handleFeedback}
+            onHelp={handleHelp}
             onLogout={handleLogout}
           />
         )}
@@ -56,10 +70,14 @@ const AboutPage: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 p-6 bg-gray-50">
         <div className="max-w-4xl mx-auto">
-          <Paper elevation={1} sx={{ p: 4, mb: 4 }}>
+          <Paper elevation={1} sx={{ p: 4 }}>
             <Typography
               variant="h4"
-              sx={{ mb: 3, fontFamily: "'Rubik', sans-serif" }}
+              sx={{
+                mb: 3,
+                fontFamily: "'Rubik', sans-serif",
+                textAlign: "center",
+              }}
             >
               Welcome to Twain Story Writer
             </Typography>
@@ -70,50 +88,67 @@ const AboutPage: React.FC = () => {
               streamline your creative process and help you focus on what
               matters most: telling great stories.
             </Typography>
-            <Typography variant="body1" sx={{ mb: 2, lineHeight: 1.6 }}>
+            <Typography variant="body1" sx={{ mb: 4, lineHeight: 1.6 }}>
               Our platform offers powerful features for organizing your ideas,
               developing characters, outlining plots, and writing chapters. With
               both Freelance and Professional plans available, we provide
               flexible options to suit every writer&apos;s needs.
             </Typography>
-          </Paper>
 
-          <Paper elevation={1} sx={{ p: 4, mb: 4 }}>
             <Typography
               variant="h5"
-              sx={{ mb: 3, fontFamily: "'Rubik', sans-serif" }}
+              sx={{ mb: 3, mt: 4, fontFamily: "'Rubik', sans-serif" }}
             >
               Key Features
             </Typography>
-            <Box component="ul" sx={{ pl: 2 }}>
-              <Typography component="li" sx={{ mb: 1 }}>
-                📚 Organize multiple books and series
-              </Typography>
-              <Typography component="li" sx={{ mb: 1 }}>
-                ✍️ Powerful writing editor with formatting tools
-              </Typography>
-              <Typography component="li" sx={{ mb: 1 }}>
-                👥 Character development and management
-              </Typography>
-              <Typography component="li" sx={{ mb: 1 }}>
-                📋 Chapter and outline organization
-              </Typography>
-              <Typography component="li" sx={{ mb: 1 }}>
-                💡 Idea capture and story planning
-              </Typography>
-              <Typography component="li" sx={{ mb: 1 }}>
-                📊 Word count tracking and progress monitoring
-              </Typography>
-              <Typography component="li" sx={{ mb: 1 }}>
-                📤 Export capabilities for various formats
-              </Typography>
+            <Box sx={{ pl: 4, mb: 4 }}>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <MenuBookOutlined sx={{ mr: 2, color: "primary.main" }} />
+                <Typography variant="body1">
+                  Organize multiple books and series
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <EditOutlined sx={{ mr: 2, color: "primary.main" }} />
+                <Typography variant="body1">
+                  Powerful writing editor with formatting tools
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <PeopleOutlined sx={{ mr: 2, color: "primary.main" }} />
+                <Typography variant="body1">
+                  Character development and management
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <ListAltOutlined sx={{ mr: 2, color: "primary.main" }} />
+                <Typography variant="body1">
+                  Chapter and outline organization
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <LightbulbOutlined sx={{ mr: 2, color: "primary.main" }} />
+                <Typography variant="body1">
+                  Idea capture and story planning
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <BarChartOutlined sx={{ mr: 2, color: "primary.main" }} />
+                <Typography variant="body1">
+                  Word count tracking and progress monitoring
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <FileDownloadOutlined sx={{ mr: 2, color: "primary.main" }} />
+                <Typography variant="body1">
+                  Export capabilities for various formats
+                </Typography>
+              </Box>
             </Box>
-          </Paper>
 
-          <Paper elevation={1} sx={{ p: 4 }}>
             <Typography
               variant="h5"
-              sx={{ mb: 3, fontFamily: "'Rubik', sans-serif" }}
+              sx={{ mb: 3, mt: 4, fontFamily: "'Rubik', sans-serif" }}
             >
               Get Started
             </Typography>

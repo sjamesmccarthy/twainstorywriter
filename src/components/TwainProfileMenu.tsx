@@ -1,7 +1,22 @@
 "use client";
 
 import React, { useState } from "react";
-import { Menu, MenuItem, Avatar, IconButton, Chip } from "@mui/material";
+import {
+  Menu,
+  MenuItem,
+  Avatar,
+  IconButton,
+  Chip,
+  ListItemIcon,
+  ListItemText,
+} from "@mui/material";
+import {
+  Settings as SettingsIcon,
+  Info as InfoIcon,
+  Help as HelpIcon,
+  Feedback as FeedbackIcon,
+  Logout as LogoutIcon,
+} from "@mui/icons-material";
 
 // Utility function to process Google profile image URL
 const processGoogleImageUrl = (url: string): string => {
@@ -238,6 +253,12 @@ const TwainProfileMenu: React.FC<TwainProfileMenuProps> = ({
           vertical: "top",
           horizontal: "right",
         }}
+        sx={{
+          "& .MuiPaper-root": {
+            minWidth: "200px",
+            width: "200px",
+          },
+        }}
       >
         {showPlanChip && (
           <div className="ml-2 pb-1 pt-2">
@@ -245,12 +266,43 @@ const TwainProfileMenu: React.FC<TwainProfileMenuProps> = ({
           </div>
         )}
         {onAccountSettings && (
-          <MenuItem onClick={handleAccountSettings}>Account Settings</MenuItem>
+          <MenuItem onClick={handleAccountSettings}>
+            <ListItemIcon>
+              <SettingsIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Account Settings</ListItemText>
+          </MenuItem>
         )}
-        {onAbout && <MenuItem onClick={handleAbout}>About</MenuItem>}
-        {onHelp && <MenuItem onClick={handleHelp}>Help</MenuItem>}
-        {onFeedback && <MenuItem onClick={handleFeedback}>Feedback</MenuItem>}
-        <MenuItem onClick={handleLogout}>Sign Out</MenuItem>
+        {onAbout && (
+          <MenuItem onClick={handleAbout}>
+            <ListItemIcon>
+              <InfoIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>About</ListItemText>
+          </MenuItem>
+        )}
+        {onHelp && (
+          <MenuItem onClick={handleHelp}>
+            <ListItemIcon>
+              <HelpIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Help</ListItemText>
+          </MenuItem>
+        )}
+        {onFeedback && (
+          <MenuItem onClick={handleFeedback}>
+            <ListItemIcon>
+              <FeedbackIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Feedback</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem onClick={handleLogout}>
+          <ListItemIcon>
+            <LogoutIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Sign Out</ListItemText>
+        </MenuItem>
       </Menu>
     </div>
   );

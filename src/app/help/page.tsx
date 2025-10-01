@@ -23,7 +23,7 @@ const HelpPage: React.FC = () => {
   const [expanded, setExpanded] = useState<string | false>(false);
 
   const handleBackToBookshelf = () => {
-    router.push("/twain-story-builder");
+    router.push("/bookshelf");
   };
 
   const handleAccountSettings = () => {

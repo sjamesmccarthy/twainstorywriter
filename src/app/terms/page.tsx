@@ -15,7 +15,7 @@ const TermsAndConditionsPage: React.FC = () => {
   const { planType } = useUserPreferences();
 
   const handleBackToBookshelf = () => {
-    router.push("/twain-story-builder");
+    router.push("/bookshelf");
   };
 
   const handleAccountSettings = () => {

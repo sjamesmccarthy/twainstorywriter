@@ -133,7 +133,7 @@ const AccountSettingsPage: React.FC = () => {
 
   // Profile menu handlers
   const handleBackToBookshelf = () => {
-    router.push("/twain-story-builder");
+    router.push("/bookshelf");
   };
 
   const handleAbout = () => {

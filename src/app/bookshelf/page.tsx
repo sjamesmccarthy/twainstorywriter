@@ -1,5 +1,5 @@
 import TwainStoryBuilder from "@/components/TwainStoryBuilder";
 
-export default function TwainStoryBuilderPage() {
+export default function BookShelfPage() {
   return <TwainStoryBuilder />;
 }

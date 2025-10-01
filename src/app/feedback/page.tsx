@@ -42,6 +42,8 @@ const feedbackAreas = [
   { value: "creating-book-process", label: "Creating a Book Process" },
   { value: "exporting-data", label: "Exporting All Data" },
   { value: "account-settings", label: "Account Settings" },
+  { value: "help", label: "Help/FAQ" },
+  { value: "other", label: "Other" },
 ];
 
 const FeedbackPage: React.FC = () => {
@@ -63,11 +65,15 @@ const FeedbackPage: React.FC = () => {
 
   // Profile menu handlers
   const handleAccountSettings = () => {
-    router.push("/twain-story-builder"); // Navigate back to main app for account settings
+    router.push("/bookshelf"); // Navigate back to main app for account settings
   };
 
   const handleAbout = () => {
     router.push("/about");
+  };
+
+  const handleHelp = () => {
+    router.push("/help");
   };
 
   const handleLogout = () => {
@@ -99,7 +105,7 @@ const FeedbackPage: React.FC = () => {
 
   const handleBackToBookshelf = () => {
     localStorage.removeItem("feedbackSubmitted");
-    router.push("/twain-story-builder");
+    router.push("/bookshelf");
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -184,6 +190,7 @@ const FeedbackPage: React.FC = () => {
             planType={planType}
             onAccountSettings={handleAccountSettings}
             onAbout={handleAbout}
+            onHelp={handleHelp}
             onLogout={handleLogout}
             additionalClasses="z-50"
           />

@@ -36,7 +36,7 @@ export default function SignInPage() {
 
     try {
       const result = await signIn("google", {
-        callbackUrl: "/",
+        callbackUrl: "/bookshelf",
         redirect: false,
       });
 
@@ -47,7 +47,7 @@ export default function SignInPage() {
         if (result.url.includes("/auth/signup")) {
           router.push(result.url);
         } else {
-          router.push(result.url || "/");
+          router.push(result.url || "/bookshelf");
         }
       }
     } catch (err) {
