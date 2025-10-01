@@ -164,7 +164,7 @@ interface TwainProfileMenuProps {
     };
   } | null;
   planType: "freelance" | "professional";
-  onAccountSettings: () => void;
+  onAccountSettings?: () => void;
   onAbout?: () => void;
   onFeedback?: () => void;
   onLogout: () => void;
@@ -194,7 +194,7 @@ const TwainProfileMenu: React.FC<TwainProfileMenuProps> = ({
 
   const handleAccountSettings = () => {
     handleMenuClose();
-    onAccountSettings();
+    onAccountSettings?.();
   };
 
   const handleAbout = () => {
@@ -237,7 +237,9 @@ const TwainProfileMenu: React.FC<TwainProfileMenuProps> = ({
             <Chip {...getPlanChipProps(planType)} />
           </div>
         )}
-        <MenuItem onClick={handleAccountSettings}>Account Settings</MenuItem>
+        {onAccountSettings && (
+          <MenuItem onClick={handleAccountSettings}>Account Settings</MenuItem>
+        )}
         {onAbout && <MenuItem onClick={handleAbout}>About</MenuItem>}
         {onFeedback && <MenuItem onClick={handleFeedback}>Feedback</MenuItem>}
         <MenuItem onClick={handleLogout}>Sign Out</MenuItem>
