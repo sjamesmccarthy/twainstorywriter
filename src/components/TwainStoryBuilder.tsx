@@ -23,6 +23,14 @@ import {
   Switch,
   Checkbox,
   FormGroup,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Alert,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -38,6 +46,9 @@ import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import { twainPricingPlans } from "../data/twainPricingPlans";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import FileCopyOutlinedIcon from "@mui/icons-material/FileCopyOutlined";
@@ -219,6 +230,17 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
 };
 
 // Type definitions
+interface SignupRequest {
+  id: string;
+  name: string;
+  email: string;
+  status: "pending" | "approved" | "rejected";
+  requested_at: string;
+  processed_at?: string | null;
+  processed_by?: string | null;
+  notes?: string | null;
+}
+
 interface Contributor {
   id: string;
   role:
@@ -589,6 +611,11 @@ const TwainStoryBuilder: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [aboutAuthor, setAboutAuthor] = useState("");
+  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminMessage, setAdminMessage] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use twain5.png for the login screen
@@ -782,6 +809,112 @@ const TwainStoryBuilder: React.FC = () => {
       showNotification("Successfully switched back to Freelance plan!");
     }, 100);
   };
+
+  // Admin functions
+  const checkAdminStatus = React.useCallback(async () => {
+    if (!session?.user?.email) {
+      setIsCurrentUserAdmin(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/admin/check");
+      const data = await response.json();
+      setIsCurrentUserAdmin(data.isAdmin || false);
+    } catch (error) {
+      console.error("Error checking admin status:", error);
+      setIsCurrentUserAdmin(false);
+    }
+  }, [session?.user?.email]);
+
+  // Check admin status when session changes
+  React.useEffect(() => {
+    checkAdminStatus();
+  }, [checkAdminStatus]);
+
+  const loadSignupRequests = React.useCallback(async () => {
+    if (!isCurrentUserAdmin) return;
+
+    setAdminLoading(true);
+    setAdminError("");
+
+    try {
+      const response = await fetch("/api/signup-requests");
+      const data = await response.json();
+
+      if (response.ok) {
+        setSignupRequests(data.requests || []);
+      } else {
+        setAdminError(data.error || "Failed to load signup requests");
+      }
+    } catch (error) {
+      console.error("Error loading signup requests:", error);
+      setAdminError("Failed to load signup requests");
+    } finally {
+      setAdminLoading(false);
+    }
+  }, [isCurrentUserAdmin]);
+
+  const handleSignupRequestAction = async (
+    requestId: string,
+    action: "approve" | "reject",
+    notes?: string
+  ) => {
+    setAdminLoading(true);
+    setAdminError("");
+    setAdminMessage("");
+
+    try {
+      const response = await fetch("/api/signup-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action,
+          requestId,
+          notes,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setAdminMessage(`Signup request ${action}d successfully`);
+        // Reload signup requests
+        await loadSignupRequests();
+      } else {
+        setAdminError(data.error || `Failed to ${action} signup request`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing signup request:`, error);
+      setAdminError(`Failed to ${action} signup request`);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  // Load signup requests when admin view is accessed
+  React.useEffect(() => {
+    if (currentView === "account" && isCurrentUserAdmin) {
+      loadSignupRequests();
+    }
+  }, [currentView, isCurrentUserAdmin, loadSignupRequests]);
+
+  // Clear admin messages after 3 seconds
+  React.useEffect(() => {
+    if (adminMessage) {
+      const timer = setTimeout(() => setAdminMessage(""), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [adminMessage]);
+
+  React.useEffect(() => {
+    if (adminError) {
+      const timer = setTimeout(() => setAdminError(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [adminError]);
 
   const handleFilterChange = (newFilter: "all" | "books" | "stories") => {
     setFilter(newFilter);
@@ -3170,6 +3303,242 @@ const TwainStoryBuilder: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Admin Section - Only show for admin users */}
+                {isCurrentUserAdmin && (
+                  <div className="bg-white rounded-lg p-6 shadow-sm">
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        fontFamily: "'Rubik', sans-serif",
+                        fontWeight: 600,
+                        marginBottom: 3,
+                        color: "rgb(31, 41, 55)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                      }}
+                    >
+                      <AdminPanelSettingsIcon
+                        sx={{ color: "rgb(19, 135, 194)" }}
+                      />
+                      Admin Panel
+                    </Typography>
+
+                    {/* Admin Messages */}
+                    {adminMessage && (
+                      <Alert
+                        severity="success"
+                        sx={{ mb: 2, fontFamily: "'Rubik', sans-serif" }}
+                      >
+                        {adminMessage}
+                      </Alert>
+                    )}
+
+                    {adminError && (
+                      <Alert
+                        severity="error"
+                        sx={{ mb: 2, fontFamily: "'Rubik', sans-serif" }}
+                      >
+                        {adminError}
+                      </Alert>
+                    )}
+
+                    {/* Signup Requests Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            fontFamily: "'Rubik', sans-serif",
+                            fontWeight: 500,
+                            color: "rgb(31, 41, 55)",
+                          }}
+                        >
+                          Signup Requests (
+                          {
+                            signupRequests.filter(
+                              (req) => req.status === "pending"
+                            ).length
+                          }{" "}
+                          pending)
+                        </Typography>
+                        <Button
+                          onClick={loadSignupRequests}
+                          disabled={adminLoading}
+                          size="small"
+                          sx={{
+                            textTransform: "none",
+                            fontFamily: "'Rubik', sans-serif",
+                          }}
+                        >
+                          {adminLoading ? "Loading..." : "Refresh"}
+                        </Button>
+                      </div>
+
+                      {signupRequests.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                          <Typography
+                            variant="body2"
+                            sx={{ fontFamily: "'Rubik', sans-serif" }}
+                          >
+                            No signup requests found
+                          </Typography>
+                        </div>
+                      ) : (
+                        <TableContainer
+                          component={Paper}
+                          elevation={0}
+                          sx={{ border: "1px solid rgb(229, 231, 235)" }}
+                        >
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow
+                                sx={{ backgroundColor: "rgb(249, 250, 251)" }}
+                              >
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Name
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Email
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Status
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Requested
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Actions
+                                </TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {signupRequests.map((request) => (
+                                <TableRow key={request.id}>
+                                  <TableCell
+                                    sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                  >
+                                    {request.name}
+                                  </TableCell>
+                                  <TableCell
+                                    sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                  >
+                                    {request.email}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Chip
+                                      label={request.status}
+                                      size="small"
+                                      color={
+                                        request.status === "pending"
+                                          ? "warning"
+                                          : request.status === "approved"
+                                          ? "success"
+                                          : "error"
+                                      }
+                                      sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                    />
+                                  </TableCell>
+                                  <TableCell
+                                    sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                  >
+                                    {new Date(
+                                      request.requested_at
+                                    ).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell>
+                                    {request.status === "pending" && (
+                                      <div className="flex gap-1">
+                                        <IconButton
+                                          size="small"
+                                          onClick={() =>
+                                            handleSignupRequestAction(
+                                              request.id,
+                                              "approve"
+                                            )
+                                          }
+                                          disabled={adminLoading}
+                                          sx={{
+                                            color: "rgb(34, 197, 94)",
+                                            "&:hover": {
+                                              backgroundColor:
+                                                "rgba(34, 197, 94, 0.1)",
+                                            },
+                                          }}
+                                        >
+                                          <CheckIcon fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                          size="small"
+                                          onClick={() =>
+                                            handleSignupRequestAction(
+                                              request.id,
+                                              "reject"
+                                            )
+                                          }
+                                          disabled={adminLoading}
+                                          sx={{
+                                            color: "rgb(239, 68, 68)",
+                                            "&:hover": {
+                                              backgroundColor:
+                                                "rgba(239, 68, 68, 0.1)",
+                                            },
+                                          }}
+                                        >
+                                          <CloseRoundedIcon fontSize="small" />
+                                        </IconButton>
+                                      </div>
+                                    )}
+                                    {request.status !== "pending" && (
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          fontFamily: "'Rubik', sans-serif",
+                                          color: "rgb(107, 114, 128)",
+                                        }}
+                                      >
+                                        {request.processed_at &&
+                                          `${request.status} on ${new Date(
+                                            request.processed_at
+                                          ).toLocaleDateString()}`}
+                                      </Typography>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Account Statistics */}
                 <div className="bg-white rounded-lg p-6 shadow-sm">
