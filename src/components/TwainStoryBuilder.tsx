@@ -6,9 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Button,
   Typography,
-  Menu,
   MenuItem,
-  Avatar,
   IconButton,
   Modal,
   Box,
@@ -49,6 +47,7 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import ArchiveIcon from "@mui/icons-material/Archive";
 import { twainPricingPlans } from "../data/twainPricingPlans";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import FileCopyOutlinedIcon from "@mui/icons-material/FileCopyOutlined";
@@ -59,175 +58,9 @@ import TwainStoryWriter from "./TwainStoryWriter";
 import TwainStoryPricingModal, {
   ProfessionalFeatureChip,
 } from "./TwainStoryPricingModal";
+import TwainProfileMenu, { UserAvatar } from "./TwainProfileMenu";
 import { useUserPreferences } from "../hooks/useUserPreferences";
 import { migrateUserPreferencesEndDate } from "../lib/userPreferences";
-
-// Utility function to process Google profile image URL
-const processGoogleImageUrl = (url: string): string => {
-  // Remove size parameters and add our own
-  const baseUrl = url.split("=")[0];
-  return `${baseUrl}=s40-c`;
-};
-
-// Custom Avatar Component
-interface UserAvatarProps {
-  session: {
-    user?: {
-      name?: string | null;
-      email?: string | null;
-      image?: string | null;
-    };
-  } | null;
-  onError?: () => void;
-}
-
-const UserAvatar: React.FC<UserAvatarProps> = ({ session, onError }) => {
-  const [imageError, setImageError] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
-
-  // Fallback avatar component
-  const FallbackAvatar = () => (
-    <Avatar
-      sx={{
-        width: 40,
-        height: 40,
-        bgcolor: "rgb(19, 135, 194)",
-        color: "white",
-        fontSize: "16px",
-        fontWeight: 600,
-      }}
-    >
-      {session?.user?.name ? session.user.name.charAt(0).toUpperCase() : "?"}
-    </Avatar>
-  );
-
-  if (!session?.user?.image || imageError) {
-    return <FallbackAvatar />;
-  }
-
-  return (
-    <div
-      style={{
-        width: 40,
-        height: 40,
-        borderRadius: "50%",
-        overflow: "hidden",
-        position: "relative",
-        backgroundColor: imageLoaded ? "transparent" : "rgb(19, 135, 194)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      {!imageLoaded && (
-        <span
-          style={{
-            color: "white",
-            fontSize: "16px",
-            fontWeight: 600,
-            position: "absolute",
-            zIndex: 1,
-          }}
-        >
-          {session?.user?.name
-            ? session.user.name.charAt(0).toUpperCase()
-            : "?"}
-        </span>
-      )}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={processGoogleImageUrl(session.user.image)}
-        alt={session?.user?.name || "User"}
-        style={{
-          width: "40px",
-          height: "40px",
-          borderRadius: "50%",
-          objectFit: "cover",
-          display: imageLoaded ? "block" : "none",
-        }}
-        onLoad={() => {
-          setImageLoaded(true);
-          console.log(
-            "Avatar image loaded successfully:",
-            session?.user?.image
-          );
-        }}
-        onError={() => {
-          const originalUrl = session?.user?.image;
-          const processedUrl = originalUrl
-            ? processGoogleImageUrl(originalUrl)
-            : "N/A";
-          console.error(
-            "Avatar image failed to load. Original URL:",
-            originalUrl
-          );
-          console.error("Processed URL:", processedUrl);
-          setImageError(true);
-          onError?.();
-        }}
-        referrerPolicy="no-referrer"
-      />
-    </div>
-  );
-};
-
-// Reusable Profile Menu Component
-interface ProfileMenuProps {
-  session: {
-    user?: {
-      name?: string | null;
-      email?: string | null;
-      image?: string | null;
-    };
-  } | null;
-  planType: "freelance" | "professional";
-  anchorEl: HTMLElement | null;
-  onMenuOpen: (event: React.MouseEvent<HTMLElement>) => void;
-  onMenuClose: () => void;
-  onAccountSettings: () => void;
-  onLogout: () => void;
-  additionalClasses?: string;
-}
-
-const ProfileMenu: React.FC<ProfileMenuProps> = ({
-  session,
-  planType,
-  anchorEl,
-  onMenuOpen,
-  onMenuClose,
-  onAccountSettings,
-  onLogout,
-  additionalClasses = "",
-}) => {
-  return (
-    <div
-      className={`absolute top-4 right-4 flex items-center gap-2 ${additionalClasses}`}
-    >
-      <IconButton onClick={onMenuOpen}>
-        <UserAvatar session={session} />
-      </IconButton>
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={onMenuClose}
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "right",
-        }}
-        transformOrigin={{
-          vertical: "top",
-          horizontal: "right",
-        }}
-      >
-        <div className="ml-2 pb-1 pt-2">
-          <Chip {...getPlanChipProps(planType)} />
-        </div>
-        <MenuItem onClick={onAccountSettings}>Account Settings</MenuItem>
-        <MenuItem onClick={onLogout}>Sign Out</MenuItem>
-      </Menu>
-    </div>
-  );
-};
 
 // Type definitions
 interface SignupRequest {
@@ -239,6 +72,19 @@ interface SignupRequest {
   processed_at?: string | null;
   processed_by?: string | null;
   notes?: string | null;
+}
+
+interface FeedbackItem {
+  id: string;
+  timestamp: string;
+  type: "bug" | "unexpected-behavior" | "suggestion" | "other";
+  area: string;
+  subject: string;
+  description: string;
+  userEmail: string;
+  userName: string;
+  status: "open" | "archived";
+  archivedAt?: string;
 }
 
 interface Contributor {
@@ -438,48 +284,6 @@ const getPlanEndDate = (
   return endDate.toISOString();
 };
 
-// Helper function to get plan chip properties
-const getPlanChipProps = (planType: "freelance" | "professional") => {
-  switch (planType) {
-    case "freelance":
-      return {
-        label: "Freelance",
-        color: "default" as const,
-        sx: {
-          backgroundColor: "#9e9e9e",
-          color: "white",
-          fontSize: "14px",
-          fontWeight: "bold",
-          height: "32px",
-        },
-      };
-    case "professional":
-      return {
-        label: "Professional",
-        color: "error" as const,
-        sx: {
-          backgroundColor: "#f44336",
-          color: "white",
-          fontSize: "14px",
-          fontWeight: "bold",
-          height: "32px",
-        },
-      };
-    default:
-      return {
-        label: "Freelance",
-        color: "default" as const,
-        sx: {
-          backgroundColor: "#9e9e9e",
-          color: "white",
-          fontSize: "14px",
-          fontWeight: "bold",
-          height: "32px",
-        },
-      };
-  }
-};
-
 // Helper function to get unique series names from books
 const getUniqueSeriesNames = (books: Book[]): string[] => {
   const seriesNames = books
@@ -523,27 +327,11 @@ const getAvailableBookNumbers = (
 };
 
 // Reusable Footer Component
-const TwainFooter: React.FC = () => {
-  return (
-    <footer className="h-[100px] flex items-center justify-center bg-gray-200">
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        sx={{ fontFamily: "'Rubik', sans-serif", textAlign: "center" }}
-      >
-        © {new Date().getFullYear()} Twain Story Writer. All rights reserved.
-        <br />
-        You are using a BETA version of this software - please report any bugs
-        or issues and feature requests to{" "}
-        <a href="mailto:beta@twainstorywriter.com" className="underline">
-          beta@twainstorywriter.com
-        </a>
-        .
-      </Typography>
-    </footer>
-  );
-};
+import TwainPageFooter from "./TwainPageFooter";
 
+const TwainFooter: React.FC = () => {
+  return <TwainPageFooter variant="bookshelf" />;
+};
 const TwainStoryBuilder: React.FC = () => {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -556,7 +344,6 @@ const TwainStoryBuilder: React.FC = () => {
     updatePreference,
     recordLogin,
   } = useUserPreferences();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [createBookModalOpen, setCreateBookModalOpen] = useState(false);
   const [bookTitle, setBookTitle] = useState("");
   const [createStoryModalOpen, setCreateStoryModalOpen] = useState(false);
@@ -612,6 +399,7 @@ const TwainStoryBuilder: React.FC = () => {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [aboutAuthor, setAboutAuthor] = useState("");
   const [signupRequests, setSignupRequests] = useState<SignupRequest[]>([]);
+  const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminMessage, setAdminMessage] = useState("");
   const [adminError, setAdminError] = useState("");
@@ -741,22 +529,20 @@ const TwainStoryBuilder: React.FC = () => {
     setShowExportModal(false);
   };
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
   const handleLogout = () => {
-    handleMenuClose();
     signOut();
   };
 
   const handleAccountSettings = () => {
-    handleMenuClose();
     setCurrentView("account");
+  };
+
+  const handleAbout = () => {
+    router.push("/about");
+  };
+
+  const handleFeedback = () => {
+    router.push("/feedback");
   };
 
   const handleAboutAuthorChange = (value: string) => {
@@ -894,12 +680,72 @@ const TwainStoryBuilder: React.FC = () => {
     }
   };
 
-  // Load signup requests when admin view is accessed
+  const loadFeedback = React.useCallback(async () => {
+    if (!isCurrentUserAdmin) return;
+
+    setAdminLoading(true);
+    setAdminError("");
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "GET",
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        setFeedbackItems(data.feedback || []);
+      } else {
+        setAdminError(data.error || "Failed to load feedback");
+      }
+    } catch (error) {
+      console.error("Error loading feedback:", error);
+      setAdminError("Failed to load feedback");
+    } finally {
+      setAdminLoading(false);
+    }
+  }, [isCurrentUserAdmin]);
+
+  const handleArchiveFeedback = async (feedbackId: string) => {
+    setAdminLoading(true);
+    setAdminError("");
+    setAdminMessage("");
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "archive",
+          feedbackId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setAdminMessage("Feedback archived successfully");
+        // Reload feedback
+        await loadFeedback();
+      } else {
+        setAdminError(data.error || "Failed to archive feedback");
+      }
+    } catch (error) {
+      console.error("Error archiving feedback:", error);
+      setAdminError("Failed to archive feedback");
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  // Load signup requests and feedback when admin view is accessed
   React.useEffect(() => {
     if (currentView === "account" && isCurrentUserAdmin) {
       loadSignupRequests();
+      loadFeedback();
     }
-  }, [currentView, isCurrentUserAdmin, loadSignupRequests]);
+  }, [currentView, isCurrentUserAdmin, loadSignupRequests, loadFeedback]);
 
   // Clear admin messages after 3 seconds
   React.useEffect(() => {
@@ -1401,13 +1247,12 @@ const TwainStoryBuilder: React.FC = () => {
             style={{ backgroundColor: "rgb(38, 52, 63)" }}
           >
             {/* Profile Menu - Top Right */}
-            <ProfileMenu
+            <TwainProfileMenu
               session={session}
               planType={planType}
-              anchorEl={anchorEl}
-              onMenuOpen={handleMenuOpen}
-              onMenuClose={handleMenuClose}
               onAccountSettings={handleAccountSettings}
+              onAbout={handleAbout}
+              onFeedback={handleFeedback}
               onLogout={handleLogout}
             />
 
@@ -3047,13 +2892,12 @@ const TwainStoryBuilder: React.FC = () => {
             style={{ backgroundColor: "rgb(38, 52, 63)" }}
           >
             {/* Profile Menu - Top Right */}
-            <ProfileMenu
+            <TwainProfileMenu
               session={session}
               planType={planType}
-              anchorEl={anchorEl}
-              onMenuOpen={handleMenuOpen}
-              onMenuClose={handleMenuClose}
               onAccountSettings={handleAccountSettings}
+              onAbout={handleAbout}
+              onFeedback={handleFeedback}
               onLogout={handleLogout}
             />
 
@@ -3537,6 +3381,225 @@ const TwainStoryBuilder: React.FC = () => {
                         </TableContainer>
                       )}
                     </div>
+
+                    {/* Feedback Management Section */}
+                    <div className="space-y-4 mt-8">
+                      <div className="flex items-center justify-between">
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            fontFamily: "'Rubik', sans-serif",
+                            fontWeight: 500,
+                            color: "rgb(31, 41, 55)",
+                          }}
+                        >
+                          User Feedback (
+                          {
+                            feedbackItems.filter(
+                              (item) => item.status === "open"
+                            ).length
+                          }{" "}
+                          open)
+                        </Typography>
+                        <Button
+                          onClick={loadFeedback}
+                          disabled={adminLoading}
+                          size="small"
+                          sx={{
+                            textTransform: "none",
+                            fontFamily: "'Rubik', sans-serif",
+                          }}
+                        >
+                          {adminLoading ? "Loading..." : "Refresh"}
+                        </Button>
+                      </div>
+
+                      {feedbackItems.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                          <Typography
+                            variant="body2"
+                            sx={{ fontFamily: "'Rubik', sans-serif" }}
+                          >
+                            No feedback found
+                          </Typography>
+                        </div>
+                      ) : (
+                        <TableContainer component={Paper} elevation={0}>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow
+                                sx={{ backgroundColor: "rgb(249, 250, 251)" }}
+                              >
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Type
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Area
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Subject
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  User
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Status
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Date
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Actions
+                                </TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {feedbackItems.map((feedback) => (
+                                <TableRow key={feedback.id}>
+                                  <TableCell
+                                    sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                  >
+                                    <Chip
+                                      label={feedback.type.replace("-", " ")}
+                                      size="small"
+                                      color={
+                                        feedback.type === "bug"
+                                          ? "error"
+                                          : feedback.type === "suggestion"
+                                          ? "success"
+                                          : "default"
+                                      }
+                                      sx={{
+                                        fontFamily: "'Rubik', sans-serif",
+                                        textTransform: "capitalize",
+                                      }}
+                                    />
+                                  </TableCell>
+                                  <TableCell
+                                    sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                  >
+                                    {feedback.area.replace("-", " ")}
+                                  </TableCell>
+                                  <TableCell
+                                    sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                  >
+                                    <div>
+                                      <div className="font-medium">
+                                        {feedback.subject}
+                                      </div>
+                                      <div className="text-sm text-gray-500 truncate max-w-xs">
+                                        {feedback.description}
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell
+                                    sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                  >
+                                    <div>
+                                      <div className="font-medium">
+                                        {feedback.userName}
+                                      </div>
+                                      <div className="text-sm text-gray-500">
+                                        {feedback.userEmail}
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Chip
+                                      label={feedback.status}
+                                      size="small"
+                                      color={
+                                        feedback.status === "open"
+                                          ? "primary"
+                                          : "default"
+                                      }
+                                      sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                    />
+                                  </TableCell>
+                                  <TableCell
+                                    sx={{ fontFamily: "'Rubik', sans-serif" }}
+                                  >
+                                    {new Date(
+                                      feedback.timestamp
+                                    ).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell>
+                                    {feedback.status === "open" && (
+                                      <IconButton
+                                        onClick={() =>
+                                          handleArchiveFeedback(feedback.id)
+                                        }
+                                        disabled={adminLoading}
+                                        size="small"
+                                        title="Archive feedback"
+                                        sx={{
+                                          color: "rgb(107, 114, 128)",
+                                          "&:hover": {
+                                            backgroundColor:
+                                              "rgba(107, 114, 128, 0.1)",
+                                          },
+                                        }}
+                                      >
+                                        <ArchiveIcon fontSize="small" />
+                                      </IconButton>
+                                    )}
+                                    {feedback.status !== "open" && (
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          fontFamily: "'Rubik', sans-serif",
+                                          color: "rgb(107, 114, 128)",
+                                        }}
+                                      >
+                                        {feedback.archivedAt &&
+                                          `archived on ${new Date(
+                                            feedback.archivedAt
+                                          ).toLocaleDateString()}`}
+                                      </Typography>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -3864,13 +3927,12 @@ const TwainStoryBuilder: React.FC = () => {
           }}
         >
           {/* Profile Menu - Top Right */}
-          <ProfileMenu
+          <TwainProfileMenu
             session={session}
             planType={planType}
-            anchorEl={anchorEl}
-            onMenuOpen={handleMenuOpen}
-            onMenuClose={handleMenuClose}
             onAccountSettings={handleAccountSettings}
+            onAbout={handleAbout}
+            onFeedback={handleFeedback}
             onLogout={handleLogout}
             additionalClasses="z-10"
           />
@@ -5402,10 +5464,7 @@ export {
   updateQuickStoryWordCount,
   getQuickStoriesStorageKey,
   TwainFooter,
-  ProfileMenu,
-  UserAvatar,
-  getPlanChipProps,
 };
-export type { Book, ProfileMenuProps };
+export type { Book };
 
 export default TwainStoryBuilder;
