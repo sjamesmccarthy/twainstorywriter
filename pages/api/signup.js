@@ -1,4 +1,44 @@
-import pool from "../../src/lib/db";
+import { getUserByEmail } from "../../src/lib/users";
+import fs from "fs";
+import path from "path";
+
+const SIGNUP_REQUESTS_FILE = path.join(
+  process.cwd(),
+  "src/data/signup-requests.json"
+);
+
+// Helper functions for signup requests file
+function readSignupRequests() {
+  try {
+    if (!fs.existsSync(SIGNUP_REQUESTS_FILE)) {
+      return [];
+    }
+    const fileContent = fs.readFileSync(SIGNUP_REQUESTS_FILE, "utf8");
+    const data = JSON.parse(fileContent);
+    return data.requests || [];
+  } catch (error) {
+    console.error("Error reading signup requests file:", error);
+    return [];
+  }
+}
+
+function writeSignupRequests(requests) {
+  try {
+    const data = { requests };
+    fs.writeFileSync(
+      SIGNUP_REQUESTS_FILE,
+      JSON.stringify(data, null, 2),
+      "utf8"
+    );
+  } catch (error) {
+    console.error("Error writing signup requests file:", error);
+    throw error;
+  }
+}
+
+function generateRequestId() {
+  return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -19,51 +59,50 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Check if user already exists
-    const [existingUser] = await pool.execute(
-      "SELECT id FROM users WHERE email = ?",
-      [email.toLowerCase()]
-    );
+    // Check if user already exists in users.json
+    const existingUser = getUserByEmail(email.toLowerCase());
 
-    if (Array.isArray(existingUser) && existingUser.length > 0) {
+    if (existingUser) {
       return res.status(409).json({
         error: "An account with this email already exists",
       });
     }
 
     // Check if there's already a pending signup request
-    const [existingSignup] = await pool.execute(
-      "SELECT id FROM signup_requests WHERE email = ? AND status = 'pending'",
-      [email.toLowerCase()]
+    const signupRequests = readSignupRequests();
+    const existingSignup = signupRequests.find(
+      (req) =>
+        req.email.toLowerCase() === email.toLowerCase() &&
+        req.status === "pending"
     );
 
-    if (Array.isArray(existingSignup) && existingSignup.length > 0) {
+    if (existingSignup) {
       return res.status(409).json({
         error: "A signup request with this email is already pending",
       });
     }
 
     // Create signup request
-    const [result] = await pool.execute(
-      "INSERT INTO signup_requests (name, email, status, requested_at) VALUES (?, ?, 'pending', NOW())",
-      [name.trim(), email.toLowerCase()]
-    );
+    const newRequest = {
+      id: generateRequestId(),
+      name: name.trim(),
+      email: email.toLowerCase(),
+      status: "pending",
+      requested_at: new Date().toISOString(),
+      processed_at: null,
+      processed_by: null,
+      notes: null,
+    };
+
+    signupRequests.push(newRequest);
+    writeSignupRequests(signupRequests);
 
     return res.status(201).json({
       message: "Signup request submitted successfully",
-      requestId: result.insertId,
+      requestId: newRequest.id,
     });
   } catch (error) {
     console.error("Signup API error:", error);
-
-    // Check if it's a database table error
-    if (error.code === "ER_NO_SUCH_TABLE") {
-      return res.status(500).json({
-        error:
-          "Signup functionality is not yet available. Please contact the administrator.",
-      });
-    }
-
     return res.status(500).json({ error: "Internal server error" });
   }
 }

@@ -1,19 +1,6 @@
 import NextAuth, { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import pool from "../../../src/lib/db";
-
-// Function to check if user is allowed
-async function isUserAllowed(email: string): Promise<boolean> {
-  try {
-    const [rows] = await pool.execute("SELECT id FROM users WHERE email = ?", [
-      email,
-    ]);
-    return Array.isArray(rows) && rows.length > 0;
-  } catch (error) {
-    console.error("Error checking user permission:", error);
-    return false;
-  }
-}
+import { isUserAllowed, addOrUpdateUser } from "../../../src/lib/users";
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -32,9 +19,20 @@ export const authOptions: AuthOptions = {
     error: "/auth/access-denied", // Custom error page
   },
   callbacks: {
-    async signIn({ user }) {
-      // Check if the user's email is in the users table
-      if (user.email && (await isUserAllowed(user.email))) {
+    async signIn({ user, account }) {
+      // Check if the user's email is in the users.json file
+      if (user.email && isUserAllowed(user.email)) {
+        // Update user info in users.json with Google data
+        try {
+          addOrUpdateUser({
+            email: user.email,
+            name: user.name || "",
+            image: user.image || "",
+            provider_id: account?.providerAccountId || "",
+          });
+        } catch (error) {
+          console.error("Error updating user info:", error);
+        }
         return true;
       }
       // Redirect to signup page with user email

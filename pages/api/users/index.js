@@ -1,6 +1,11 @@
-import pool from "../../../src/lib/db";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
+import {
+  getAllUsers,
+  getUserByEmail,
+  addUserToAllowedList,
+  removeUserFromAllowedList,
+} from "../../../src/lib/users";
 
 async function checkUserAuth(req, res) {
   const session = await getServerSession(req, res, authOptions);
@@ -9,16 +14,13 @@ async function checkUserAuth(req, res) {
     return { error: "Unauthorized", status: 401 };
   }
 
-  const [adminCheck] = await pool.execute(
-    'SELECT id FROM users WHERE email = ? AND oauth = "GOOGLE"',
-    [session.user.email]
-  );
+  const user = getUserByEmail(session.user.email);
 
-  if (!Array.isArray(adminCheck) || adminCheck.length === 0) {
+  if (!user || user.status !== "active") {
     return { error: "Access denied", status: 403 };
   }
 
-  return { user: session.user };
+  return { user: session.user, userData: user };
 }
 
 export default async function handler(req, res) {
@@ -30,30 +32,25 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case "GET": {
-        const [users] = await pool.execute(
-          "SELECT id, email, name, oauth, created FROM users ORDER BY created"
-        );
+        const users = getAllUsers();
         return res.status(200).json({ users });
       }
 
       case "POST": {
-        const { email, name, oauth = "GOOGLE" } = req.body;
+        const { email, name, isAdmin = false } = req.body;
 
         if (!email || !name) {
           return res.status(400).json({ error: "Email and name are required" });
         }
 
         try {
-          const [result] = await pool.execute(
-            "INSERT INTO users (email, name, oauth) VALUES (?, ?, ?)",
-            [email, name, oauth]
-          );
+          const newUser = addUserToAllowedList({ email, name, isAdmin });
           return res.status(201).json({
             message: "User added successfully",
-            userId: result.insertId,
+            user: newUser,
           });
         } catch (error) {
-          if (error.code === "ER_DUP_ENTRY") {
+          if (error.message === "User already exists") {
             return res.status(409).json({ error: "User already exists" });
           }
           throw error;
@@ -73,12 +70,9 @@ export default async function handler(req, res) {
             .json({ error: "Cannot delete your own account" });
         }
 
-        const [deleteResult] = await pool.execute(
-          "DELETE FROM users WHERE email = ?",
-          [emailToDelete]
-        );
+        const success = removeUserFromAllowedList(emailToDelete);
 
-        if (deleteResult.affectedRows > 0) {
+        if (success) {
           return res.status(200).json({ message: "User removed successfully" });
         } else {
           return res.status(404).json({ error: "User not found" });

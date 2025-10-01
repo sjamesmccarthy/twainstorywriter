@@ -1,6 +1,42 @@
-import pool from "../../src/lib/db";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
+import { getUserByEmail, addUserToAllowedList } from "../../src/lib/users";
+import fs from "fs";
+import path from "path";
+
+const SIGNUP_REQUESTS_FILE = path.join(
+  process.cwd(),
+  "src/data/signup-requests.json"
+);
+
+// Helper functions for signup requests file
+function readSignupRequests() {
+  try {
+    if (!fs.existsSync(SIGNUP_REQUESTS_FILE)) {
+      return [];
+    }
+    const fileContent = fs.readFileSync(SIGNUP_REQUESTS_FILE, "utf8");
+    const data = JSON.parse(fileContent);
+    return data.requests || [];
+  } catch (error) {
+    console.error("Error reading signup requests file:", error);
+    return [];
+  }
+}
+
+function writeSignupRequests(requests) {
+  try {
+    const data = { requests };
+    fs.writeFileSync(
+      SIGNUP_REQUESTS_FILE,
+      JSON.stringify(data, null, 2),
+      "utf8"
+    );
+  } catch (error) {
+    console.error("Error writing signup requests file:", error);
+    throw error;
+  }
+}
 
 async function checkAdminAuth(req, res) {
   const session = await getServerSession(req, res, authOptions);
@@ -9,18 +45,14 @@ async function checkAdminAuth(req, res) {
     return { error: "Unauthorized", status: 401 };
   }
 
-  // Check if user is admin (checking if they're in the users table AND is_admin = 1)
-  const [adminCheck] = await pool.execute(
-    'SELECT id, is_admin FROM users WHERE email = ? AND oauth = "GOOGLE"',
-    [session.user.email]
-  );
+  const user = getUserByEmail(session.user.email);
 
-  if (!Array.isArray(adminCheck) || adminCheck.length === 0) {
+  if (!user || user.status !== "active") {
     return { error: "Access denied", status: 403 };
   }
 
   // Check if user has admin privileges
-  if (adminCheck[0].is_admin !== 1) {
+  if (!user.is_admin) {
     return { error: "Admin access required", status: 403 };
   }
 
@@ -36,9 +68,7 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case "GET": {
-        const [requests] = await pool.execute(
-          "SELECT id, name, email, status, requested_at, processed_at, processed_by, notes FROM signup_requests ORDER BY requested_at DESC"
-        );
+        const requests = readSignupRequests();
         return res.status(200).json({ requests });
       }
 
@@ -56,28 +86,27 @@ export default async function handler(req, res) {
         }
 
         // Get the signup request
-        const [requests] = await pool.execute(
-          "SELECT * FROM signup_requests WHERE id = ? AND status = 'pending'",
-          [requestId]
+        const requests = readSignupRequests();
+        const signupRequest = requests.find(
+          (req) => req.id === requestId && req.status === "pending"
         );
 
-        if (!Array.isArray(requests) || requests.length === 0) {
+        if (!signupRequest) {
           return res
             .status(404)
             .json({ error: "Signup request not found or already processed" });
         }
 
-        const signupRequest = requests[0];
-
         if (action === "approve") {
-          // Add user to users table
+          // Add user to users.json
           try {
-            await pool.execute(
-              "INSERT INTO users (email, name, oauth) VALUES (?, ?, 'GOOGLE')",
-              [signupRequest.email, signupRequest.name]
-            );
+            addUserToAllowedList({
+              email: signupRequest.email,
+              name: signupRequest.name,
+              isAdmin: false,
+            });
           } catch (error) {
-            if (error.code === "ER_DUP_ENTRY") {
+            if (error.message === "User already exists") {
               return res.status(409).json({ error: "User already exists" });
             }
             throw error;
@@ -85,15 +114,20 @@ export default async function handler(req, res) {
         }
 
         // Update signup request status
-        await pool.execute(
-          "UPDATE signup_requests SET status = ?, processed_at = NOW(), processed_by = ?, notes = ? WHERE id = ?",
-          [
-            action === "approve" ? "approved" : "rejected",
-            authResult.user.email,
-            notes || null,
-            requestId,
-          ]
-        );
+        const updatedRequests = requests.map((req) => {
+          if (req.id === requestId) {
+            return {
+              ...req,
+              status: action === "approve" ? "approved" : "rejected",
+              processed_at: new Date().toISOString(),
+              processed_by: authResult.user.email,
+              notes: notes || null,
+            };
+          }
+          return req;
+        });
+
+        writeSignupRequests(updatedRequests);
 
         return res.status(200).json({
           message: `Signup request ${action}d successfully`,

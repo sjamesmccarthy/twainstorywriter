@@ -1,0 +1,19 @@
+{
+  "users": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "email": "hikerbikerwriter@gmail.com",
+      "name": "James M",
+      "image": "https://lh3.googleusercontent.com/a/ACg8ocIbGZ4HuwFrFgE3sN0KwoqUwIgPodJx0s07DxVjBp3aSL3YJ8oY=s96-c",
+      "provider": "google",
+      "provider_id": "113768389736967786437",
+      "account_created_at": "",
+      "last_login_at": "2025-10-01T15:48:03.734Z",
+      "login_count": 2,
+      "status": "active",
+      "created_at": "",
+      "updated_at": "2025-10-01T15:48:03.734Z",
+      "is_admin": true
+    }
+  ]
+}
