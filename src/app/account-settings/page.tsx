@@ -17,6 +17,12 @@ import {
   TableHead,
   TableRow,
   Paper,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Box,
 } from "@mui/material";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
@@ -33,6 +39,8 @@ import TwainProfileMenu, { UserAvatar } from "@/components/TwainProfileMenu";
 import TwainStoryPricingModal from "@/components/TwainStoryPricingModal";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { twainPricingPlans } from "@/data/twainPricingPlans";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 
 // Type definitions
 interface SignupRequest {
@@ -65,6 +73,92 @@ interface Book {
   wordCount: number;
 }
 
+// Additional interfaces for export functionality
+interface Idea {
+  id: string;
+  title: string;
+  notes: string;
+  createdAt: Date | string;
+}
+
+interface Character {
+  id: string;
+  avatar?: string;
+  name: string;
+  gender: string;
+  backstory: string;
+  characterization: string;
+  voice: string;
+  appearance: string;
+  friendsFamily: string;
+  favorites: string;
+  misc: string;
+  createdAt: Date | string;
+}
+
+interface Chapter {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: Date | string;
+}
+
+interface Story {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: Date | string;
+}
+
+interface Outline {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: Date | string;
+}
+
+interface Part {
+  id: string;
+  title: string;
+  chapterIds: string[];
+  storyIds: string[];
+  createdAt: Date | string;
+}
+
+// Helper function to convert Quill Delta to plain text
+const deltaToPlainText = (content: string): string => {
+  try {
+    const delta = JSON.parse(content);
+    if (delta.ops) {
+      return delta.ops
+        .map((op: { insert?: string | Record<string, unknown> }) => {
+          if (typeof op.insert === "string") {
+            return op.insert;
+          }
+          return "";
+        })
+        .join("");
+    }
+    return content;
+  } catch {
+    return content;
+  }
+};
+
+// Helper function to convert plain text to RTF format
+const textToRTF = (text: string, title?: string): string => {
+  const rtfHeader = "{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}";
+  const rtfTitle = title ? `\\f0\\fs28\\b ${title}\\b0\\fs24\\par\\par` : "";
+  const rtfText = text.replace(/\n/g, "\\par ").replace(/\r/g, "");
+  return `${rtfHeader}${rtfTitle}\\f0\\fs24 ${rtfText}}`;
+};
+
+// Helper function to format date for filenames
+const formatDateForFilename = (date: Date | string): string => {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toISOString().split("T")[0];
+};
+
 const AccountSettingsPage: React.FC = () => {
   const { data: session } = useSession();
   const router = useRouter();
@@ -87,6 +181,15 @@ const AccountSettingsPage: React.FC = () => {
     "type" | "area" | "status" | "timestamp" | null
   >(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportSuccessModalOpen, setExportSuccessModalOpen] = useState(false);
+  const [exportResults, setExportResults] = useState<{
+    fileName: string;
+    totalBooks: number;
+    totalQuickStories: number;
+    totalItems: number;
+    itemSummary: string[];
+  } | null>(null);
 
   // Mock book and story data (in a real app, these would come from your data source)
   const [books] = useState<Book[]>([]);
@@ -194,6 +297,397 @@ const AccountSettingsPage: React.FC = () => {
       startDate: new Date().toISOString(),
       endDate: undefined,
     });
+  };
+
+  // Export All Data function
+  const handleExportAllData = async () => {
+    if (!session?.user?.email) {
+      alert("User session not found. Please log in again.");
+      return;
+    }
+
+    setExportLoading(true);
+    try {
+      const zip = new JSZip();
+      const userEmail = session.user.email;
+
+      // Helper function to get storage key (matches TwainStoryWriter pattern)
+      const getStorageKey = (
+        type: string,
+        bookId: number,
+        userEmail: string,
+        isQuickStoryMode = false
+      ): string => {
+        const prefix = isQuickStoryMode ? "quickstory" : "book";
+        return `twain-${prefix}-${type}-${bookId}-${userEmail}`;
+      };
+
+      // Load all books from localStorage
+      const booksStorageKey = `twain-story-builder-books-${userEmail}`;
+      const booksData = localStorage.getItem(booksStorageKey);
+      const books = booksData ? JSON.parse(booksData) : [];
+
+      // Load quick stories
+      const quickStoriesKey = `twain-story-builder-quickstories-${userEmail}`;
+      const quickStoriesData = localStorage.getItem(quickStoriesKey);
+      const quickStories = quickStoriesData ? JSON.parse(quickStoriesData) : [];
+
+      console.log(
+        `Found ${books.length} books and ${quickStories.length} quick stories to export`
+      );
+
+      // Create Book folders for each book
+      for (const book of books) {
+        const bookFolder = zip.folder(
+          `Books/${book.title.replace(/[<>:"/\\|?*]/g, "_")}`
+        );
+
+        if (bookFolder) {
+          // Create book metadata file
+          const bookMetadata = {
+            id: book.id,
+            title: book.title,
+            author: book.author || "Unknown",
+            wordCount: book.wordCount || 0,
+            createdAt: book.createdAt,
+            updatedAt: book.updatedAt,
+          };
+          bookFolder.file(
+            "book_info.json",
+            JSON.stringify(bookMetadata, null, 2)
+          );
+
+          // Create subfolders for each category
+          const ideasFolder = bookFolder.folder("Ideas");
+          const charactersFolder = bookFolder.folder("Characters");
+          const outlinesFolder = bookFolder.folder("Outlines");
+          const storiesFolder = bookFolder.folder("Stories");
+          const chaptersFolder = bookFolder.folder("Chapters");
+
+          // Load and export Ideas
+          const ideasKey = getStorageKey("ideas", book.id, userEmail);
+          const ideasData = localStorage.getItem(ideasKey);
+          if (ideasData) {
+            const ideas: Idea[] = JSON.parse(ideasData);
+            if (ideas.length > 0) {
+              ideas.forEach((idea, index) => {
+                const filename = `${String(index + 1).padStart(
+                  3,
+                  "0"
+                )}_${idea.title.replace(/[<>:"/\\|?*]/g, "_")}.rtf`;
+                const content = textToRTF(idea.notes, idea.title);
+                ideasFolder?.file(filename, content);
+              });
+            } else {
+              ideasFolder?.file(
+                "no_ideas.txt",
+                "No ideas found for this book."
+              );
+            }
+          } else {
+            ideasFolder?.file("no_ideas.txt", "No ideas found for this book.");
+          }
+
+          // Load and export Characters
+          const charactersKey = getStorageKey("characters", book.id, userEmail);
+          const charactersData = localStorage.getItem(charactersKey);
+          if (charactersData) {
+            const characters: Character[] = JSON.parse(charactersData);
+            if (characters.length > 0) {
+              characters.forEach((character, index) => {
+                const filename = `${String(index + 1).padStart(
+                  3,
+                  "0"
+                )}_${character.name.replace(/[<>:"/\\|?*]/g, "_")}.rtf`;
+                const characterInfo = [
+                  `Name: ${character.name}`,
+                  `Gender: ${character.gender}`,
+                  `Backstory: ${character.backstory}`,
+                  `Characterization: ${character.characterization}`,
+                  `Voice: ${character.voice}`,
+                  `Appearance: ${character.appearance}`,
+                  `Friends & Family: ${character.friendsFamily}`,
+                  `Favorites: ${character.favorites}`,
+                  `Miscellaneous: ${character.misc}`,
+                ].join("\n\n");
+                const content = textToRTF(characterInfo, character.name);
+                charactersFolder?.file(filename, content);
+              });
+            } else {
+              charactersFolder?.file(
+                "no_characters.txt",
+                "No characters found for this book."
+              );
+            }
+          } else {
+            charactersFolder?.file(
+              "no_characters.txt",
+              "No characters found for this book."
+            );
+          }
+
+          // Load and export Outlines
+          const outlinesKey = getStorageKey("outlines", book.id, userEmail);
+          const outlinesData = localStorage.getItem(outlinesKey);
+          if (outlinesData) {
+            const outlines: Outline[] = JSON.parse(outlinesData);
+            if (outlines.length > 0) {
+              outlines.forEach((outline, index) => {
+                const filename = `${String(index + 1).padStart(
+                  3,
+                  "0"
+                )}_${outline.title.replace(/[<>:"/\\|?*]/g, "_")}.rtf`;
+                const plainText = deltaToPlainText(outline.content);
+                const content = textToRTF(plainText, outline.title);
+                outlinesFolder?.file(filename, content);
+              });
+            } else {
+              outlinesFolder?.file(
+                "no_outlines.txt",
+                "No outlines found for this book."
+              );
+            }
+          } else {
+            outlinesFolder?.file(
+              "no_outlines.txt",
+              "No outlines found for this book."
+            );
+          }
+
+          // Load and export Stories
+          const storiesKey = getStorageKey("stories", book.id, userEmail);
+          const storiesData = localStorage.getItem(storiesKey);
+          if (storiesData) {
+            const stories: Story[] = JSON.parse(storiesData);
+            if (stories.length > 0) {
+              stories.forEach((story, index) => {
+                const filename = `${String(index + 1).padStart(
+                  3,
+                  "0"
+                )}_${story.title.replace(/[<>:"/\\|?*]/g, "_")}.rtf`;
+                const plainText = deltaToPlainText(story.content);
+                const content = textToRTF(plainText, story.title);
+                storiesFolder?.file(filename, content);
+              });
+            } else {
+              storiesFolder?.file(
+                "no_stories.txt",
+                "No stories found for this book."
+              );
+            }
+          } else {
+            storiesFolder?.file(
+              "no_stories.txt",
+              "No stories found for this book."
+            );
+          }
+
+          // Load and export Chapters
+          const chaptersKey = getStorageKey("chapters", book.id, userEmail);
+          const chaptersData = localStorage.getItem(chaptersKey);
+          if (chaptersData) {
+            const chapters: Chapter[] = JSON.parse(chaptersData);
+            if (chapters.length > 0) {
+              chapters.forEach((chapter, index) => {
+                const filename = `${String(index + 1).padStart(
+                  3,
+                  "0"
+                )}_${chapter.title.replace(/[<>:"/\\|?*]/g, "_")}.rtf`;
+                const plainText = deltaToPlainText(chapter.content);
+                const content = textToRTF(plainText, chapter.title);
+                chaptersFolder?.file(filename, content);
+              });
+            } else {
+              chaptersFolder?.file(
+                "no_chapters.txt",
+                "No chapters found for this book."
+              );
+            }
+          } else {
+            chaptersFolder?.file(
+              "no_chapters.txt",
+              "No chapters found for this book."
+            );
+          }
+
+          // Load and export Parts
+          const partsKey = getStorageKey("parts", book.id, userEmail);
+          const partsData = localStorage.getItem(partsKey);
+          if (partsData) {
+            const parts: Part[] = JSON.parse(partsData);
+            if (parts.length > 0) {
+              parts.forEach((part, index) => {
+                const filename = `${String(index + 1).padStart(
+                  3,
+                  "0"
+                )}_${part.title.replace(/[<>:"/\\|?*]/g, "_")}.rtf`;
+                const partInfo = [
+                  `Part: ${part.title}`,
+                  `Chapter IDs: ${part.chapterIds.join(", ")}`,
+                  `Story IDs: ${part.storyIds.join(", ")}`,
+                  `Created: ${formatDateForFilename(part.createdAt)}`,
+                ].join("\n\n");
+                const content = textToRTF(partInfo, part.title);
+                bookFolder.file(`Parts/${filename}`, content);
+              });
+            } else {
+              bookFolder.file(
+                "Parts/no_parts.txt",
+                "No parts found for this book."
+              );
+            }
+          } else {
+            bookFolder.file(
+              "Parts/no_parts.txt",
+              "No parts found for this book."
+            );
+          }
+        }
+      }
+
+      // Create Quick Stories folder
+      if (quickStories.length > 0) {
+        const quickStoriesFolder = zip.folder("Quick Stories");
+        quickStories.forEach((story: Book, index: number) => {
+          const filename = `${String(index + 1).padStart(
+            3,
+            "0"
+          )}_${story.title.replace(/[<>:"/\\|?*]/g, "_")}.rtf`;
+
+          // Load the actual story content using the correct storage key for quick stories
+          const storyKey = getStorageKey("stories", story.id, userEmail, true);
+          const storyData = localStorage.getItem(storyKey);
+          let content = "";
+
+          if (storyData) {
+            const storyContent: Story[] = JSON.parse(storyData);
+            if (storyContent.length > 0) {
+              content = deltaToPlainText(storyContent[0].content);
+            }
+          }
+
+          if (!content) {
+            content = `Quick Story: ${story.title}\n\nNo content found for this story.`;
+          }
+
+          const rtfContent = textToRTF(content, story.title);
+          quickStoriesFolder?.file(filename, rtfContent);
+        });
+      } else {
+        const quickStoriesFolder = zip.folder("Quick Stories");
+        quickStoriesFolder?.file(
+          "no_quick_stories.txt",
+          "No quick stories found."
+        );
+      }
+
+      // Add a README file with instructions
+      const readmeContent = `Twain Story Writer - Data Export
+=====================================
+
+Export Date: ${new Date().toLocaleDateString()}
+User: ${userEmail}
+
+This archive contains all your writing data from Twain Story Writer.
+
+Structure:
+- Books/: Contains folders for each book with subfolders for Ideas, Characters, Outlines, Stories, and Chapters
+- Quick Stories/: Contains all your quick stories
+- README.txt: This file
+
+File Format:
+All content files are in RTF (Rich Text Format) which can be opened by most word processors including:
+- Microsoft Word
+- Google Docs  
+- LibreOffice Writer
+- TextEdit (Mac)
+- WordPad (Windows)
+
+Notes:
+- Filenames are numbered for easy sorting
+- Special characters in titles have been replaced with underscores
+- Empty categories include placeholder files explaining no content was found
+
+For questions or support, please contact the Twain Story Writer team.
+`;
+
+      zip.file("README.txt", readmeContent);
+
+      // Generate and download the ZIP file
+      const zipBlob = await zip.generateAsync({
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: {
+          level: 6,
+        },
+      });
+
+      const fileName = `Twain_Story_Writer_Backup_${
+        new Date().toISOString().split("T")[0]
+      }.zip`;
+      saveAs(zipBlob, fileName);
+
+      // Count exported items for better feedback
+      let totalItems = 0;
+      const itemSummary: string[] = [];
+
+      for (const book of books) {
+        let bookItems = 0;
+        const bookStorageChecks = [
+          { type: "ideas", key: getStorageKey("ideas", book.id, userEmail) },
+          {
+            type: "characters",
+            key: getStorageKey("characters", book.id, userEmail),
+          },
+          {
+            type: "outlines",
+            key: getStorageKey("outlines", book.id, userEmail),
+          },
+          {
+            type: "stories",
+            key: getStorageKey("stories", book.id, userEmail),
+          },
+          {
+            type: "chapters",
+            key: getStorageKey("chapters", book.id, userEmail),
+          },
+          { type: "parts", key: getStorageKey("parts", book.id, userEmail) },
+        ];
+
+        for (const check of bookStorageChecks) {
+          const data = localStorage.getItem(check.key);
+          if (data) {
+            const items = JSON.parse(data);
+            if (Array.isArray(items) && items.length > 0) {
+              bookItems += items.length;
+            }
+          }
+        }
+
+        if (bookItems > 0) {
+          itemSummary.push(`"${book.title}": ${bookItems} items`);
+        }
+        totalItems += bookItems;
+      }
+
+      // Set export results and show modal
+      setExportResults({
+        fileName,
+        totalBooks: books.length,
+        totalQuickStories: quickStories.length,
+        totalItems,
+        itemSummary,
+      });
+      setExportSuccessModalOpen(true);
+    } catch (error) {
+      console.error("Export failed:", error);
+      alert(
+        "Export failed. Please try again or contact support if the problem persists.\n\nError details: " +
+          (error instanceof Error ? error.message : "Unknown error")
+      );
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   // Admin functions
@@ -1562,20 +2056,37 @@ const AccountSettingsPage: React.FC = () => {
               <div className="flex gap-4">
                 <Button
                   variant="outlined"
+                  onClick={handleExportAllData}
+                  disabled={exportLoading}
                   sx={{
                     flex: 1,
                     textTransform: "none",
                     fontFamily: "'Rubik', sans-serif",
                     py: 1.5,
-                    borderColor: "rgb(209, 213, 219)",
-                    color: "rgb(107, 114, 128)",
+                    borderColor: exportLoading
+                      ? "rgb(156, 163, 175)"
+                      : "rgb(209, 213, 219)",
+                    color: exportLoading
+                      ? "rgb(156, 163, 175)"
+                      : "rgb(107, 114, 128)",
                     "&:hover": {
-                      borderColor: "rgb(19, 135, 194)",
-                      backgroundColor: "rgba(19, 135, 194, 0.04)",
+                      borderColor: exportLoading
+                        ? "rgb(156, 163, 175)"
+                        : "rgb(19, 135, 194)",
+                      backgroundColor: exportLoading
+                        ? "transparent"
+                        : "rgba(19, 135, 194, 0.04)",
                     },
                   }}
                 >
-                  Export All Data
+                  {exportLoading ? (
+                    <>
+                      <CircularProgress size={16} sx={{ mr: 1 }} />
+                      Exporting...
+                    </>
+                  ) : (
+                    "Export All Data"
+                  )}
                 </Button>
 
                 <Button
@@ -1613,6 +2124,104 @@ const AccountSettingsPage: React.FC = () => {
         onClose={handleClosePricing}
         onUpgrade={handleUpgradePlan}
       />
+
+      {/* Export Success Modal */}
+      <Dialog
+        open={exportSuccessModalOpen}
+        onClose={() => setExportSuccessModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        sx={{
+          "& .MuiDialog-paper": {
+            borderRadius: "16px",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            backgroundColor: "rgb(34, 197, 94)",
+            color: "white",
+            fontFamily: "'Rubik', sans-serif",
+            fontWeight: 600,
+            textAlign: "center",
+          }}
+        >
+          Export Completed Successfully!
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {exportResults && (
+            <Box>
+              <Box sx={{ pl: 2, mb: 2, pt: 4 }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontFamily: "'Rubik', sans-serif", mb: 1 }}
+                >
+                  • {exportResults.totalBooks} book(s) with all their content
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ fontFamily: "'Rubik', sans-serif", mb: 1 }}
+                >
+                  • {exportResults.totalQuickStories} quick story/stories
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ fontFamily: "'Rubik', sans-serif", mb: 1 }}
+                >
+                  • {exportResults.totalItems} total content items (ideas,
+                  characters, stories, chapters, etc.)
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ fontFamily: "'Rubik', sans-serif", mb: 1 }}
+                >
+                  • All content in RTF format for easy editing
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ fontFamily: "'Rubik', sans-serif", mb: 1 }}
+                >
+                  • A README file with instructions
+                </Typography>
+              </Box>
+
+              <Alert
+                severity="info"
+                sx={{
+                  mt: 2,
+                  "& .MuiAlert-message": {
+                    fontFamily: "'Rubik', sans-serif",
+                  },
+                }}
+              >
+                You can open RTF files with most word processors including
+                Microsoft Word, Google Docs, LibreOffice Writer, TextEdit (Mac),
+                and WordPad (Windows).
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 1, justifyContent: "center" }}>
+          <Button
+            onClick={() => setExportSuccessModalOpen(false)}
+            variant="contained"
+            sx={{
+              backgroundColor: "rgb(19, 135, 194)",
+              color: "white",
+              fontFamily: "'Rubik', sans-serif",
+              textTransform: "none",
+              px: 4,
+              boxShadow: "none",
+              "&:hover": {
+                backgroundColor: "rgb(15, 118, 170)",
+                boxShadow: "none",
+              },
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };
