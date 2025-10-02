@@ -1107,8 +1107,32 @@ const TwainStoryBuilder: React.FC = () => {
                   <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-start">
                     {/* Book Card with Upload Icon */}
                     <div className="flex flex-col items-center w-full lg:w-auto">
+                      {/* Mobile: Simple button when no cover */}
+                      {!selectedBook?.coverImage && (
+                        <Button
+                          variant="contained"
+                          startIcon={<CloudUploadOutlinedIcon />}
+                          onClick={handleCoverUpload}
+                          sx={{
+                            backgroundColor: "rgb(100, 114, 127)",
+                            "&:hover": {
+                              backgroundColor: "rgb(80, 94, 107)",
+                            },
+                            width: "100%",
+                            maxWidth: "300px",
+                            marginBottom: "16px",
+                            display: { xs: "flex", lg: "none" },
+                          }}
+                        >
+                          Upload Cover Image
+                        </Button>
+                      )}
+
+                      {/* Desktop: Show book card preview OR Mobile: Show only when cover exists */}
                       <div
-                        className="bg-white shadow-sm flex flex-col rounded-r-md cursor-pointer relative overflow-hidden w-full lg:w-[176px]"
+                        className={`bg-white shadow-sm flex flex-col rounded-r-md cursor-pointer relative overflow-hidden w-full lg:w-[176px] ${
+                          !selectedBook?.coverImage ? "hidden lg:flex" : ""
+                        }`}
                         style={{
                           aspectRatio: "176/268",
                           borderLeft: "8px solid rgb(100, 114, 127)",

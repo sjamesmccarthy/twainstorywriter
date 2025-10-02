@@ -126,6 +126,17 @@ interface Part {
   createdAt: Date | string;
 }
 
+interface NoteCard {
+  id: string;
+  title: string;
+  content: string;
+  linkedIdeaIds: string[];
+  linkedCharacterIds: string[];
+  linkedChapterIds: string[];
+  createdAt: Date | string;
+  color?: "yellow" | "red" | "blue" | "green" | "gray";
+}
+
 // Helper function to convert Quill Delta to plain text
 const deltaToPlainText = (content: string): string => {
   try {
@@ -539,6 +550,129 @@ const AccountSettingsPage: React.FC = () => {
               "No parts found for this book."
             );
           }
+
+          // Load and export Note Cards
+          const noteCardsKey = getStorageKey("notecards", book.id, userEmail);
+          const noteCardsData = localStorage.getItem(noteCardsKey);
+          if (noteCardsData) {
+            try {
+              const noteCards: NoteCard[] = JSON.parse(noteCardsData);
+
+              // Load ideas, characters, and chapters for lookup
+              const ideasData = localStorage.getItem(
+                getStorageKey("ideas", book.id, userEmail)
+              );
+              const ideas: Idea[] = ideasData ? JSON.parse(ideasData) : [];
+
+              const charactersData = localStorage.getItem(
+                getStorageKey("characters", book.id, userEmail)
+              );
+              const characters: Character[] = charactersData
+                ? JSON.parse(charactersData)
+                : [];
+
+              const chaptersData = localStorage.getItem(
+                getStorageKey("chapters", book.id, userEmail)
+              );
+              const chapters: Chapter[] = chaptersData
+                ? JSON.parse(chaptersData)
+                : [];
+
+              if (noteCards.length > 0) {
+                noteCards.forEach((noteCard, index) => {
+                  // Safely handle missing or null properties
+                  if (!noteCard || typeof noteCard !== "object") {
+                    console.warn(
+                      `Skipping invalid note card at index ${index}`
+                    );
+                    return;
+                  }
+
+                  const title = noteCard.title || `Untitled_Note_${index + 1}`;
+                  const filename = `${String(index + 1).padStart(
+                    3,
+                    "0"
+                  )}_${title.replace(/[<>:"/\\|?*]/g, "_")}.rtf`;
+
+                  // Look up linked ideas by ID and get their titles
+                  const linkedIdeasText =
+                    noteCard.linkedIdeaIds && noteCard.linkedIdeaIds.length > 0
+                      ? noteCard.linkedIdeaIds
+                          .map((id) => {
+                            const idea = ideas.find((i) => i.id === id);
+                            return idea ? idea.title : `Unknown (${id})`;
+                          })
+                          .join(", ")
+                      : "";
+
+                  // Look up linked characters by ID and get their name and gender
+                  const linkedCharactersText =
+                    noteCard.linkedCharacterIds &&
+                    noteCard.linkedCharacterIds.length > 0
+                      ? noteCard.linkedCharacterIds
+                          .map((id) => {
+                            const character = characters.find(
+                              (c) => c.id === id
+                            );
+                            return character
+                              ? `${character.name} (${character.gender})`
+                              : `Unknown (${id})`;
+                          })
+                          .join(", ")
+                      : "";
+
+                  // Look up linked chapters by ID and get their titles
+                  const linkedChaptersText =
+                    noteCard.linkedChapterIds &&
+                    noteCard.linkedChapterIds.length > 0
+                      ? noteCard.linkedChapterIds
+                          .map((id) => {
+                            const chapter = chapters.find((ch) => ch.id === id);
+                            return chapter ? chapter.title : `Unknown (${id})`;
+                          })
+                          .join(", ")
+                      : "";
+
+                  // Build note card content with all details, handling null/undefined values
+                  const noteCardInfo = [
+                    `Title: ${title}`,
+                    `Color: ${noteCard.color || "yellow"}`,
+                    `Content: ${noteCard.content || ""}`,
+                    linkedIdeasText ? `Linked Ideas: ${linkedIdeasText}` : "",
+                    linkedCharactersText
+                      ? `Linked Characters: ${linkedCharactersText}`
+                      : "",
+                    linkedChaptersText
+                      ? `Linked Chapters: ${linkedChaptersText}`
+                      : "",
+                    noteCard.createdAt
+                      ? `Created: ${formatDateForFilename(noteCard.createdAt)}`
+                      : "",
+                  ]
+                    .filter((line) => line)
+                    .join("\n\n");
+                  const content = textToRTF(noteCardInfo, title);
+                  bookFolder.file(`Note_Cards/${filename}`, content);
+                });
+              } else {
+                bookFolder.file(
+                  "Note_Cards/no_note_cards.txt",
+                  "No note cards found for this book."
+                );
+              }
+            } catch (error) {
+              console.error("Failed to parse note cards:", error);
+              bookFolder.file(
+                "Note_Cards/error.txt",
+                "Error loading note cards for this book."
+              );
+            }
+          } else {
+            bookFolder.file(
+              "Note_Cards/no_note_cards.txt",
+              "No note cards found for this book."
+            );
+          }
         }
       }
 
@@ -588,7 +722,7 @@ User: ${userEmail}
 This archive contains all your writing data from Twain Story Writer.
 
 Structure:
-- Books/: Contains folders for each book with subfolders for Ideas, Characters, Outlines, Stories, and Chapters
+- Books/: Contains folders for each book with subfolders for Ideas, Characters, Outlines, Stories, Chapters, Parts, and Note Cards
 - Quick Stories/: Contains all your quick stories
 - README.txt: This file
 
@@ -649,6 +783,10 @@ For questions or support, please contact the Twain Story Writer team.
             key: getStorageKey("chapters", book.id, userEmail),
           },
           { type: "parts", key: getStorageKey("parts", book.id, userEmail) },
+          {
+            type: "notecards",
+            key: getStorageKey("notecards", book.id, userEmail),
+          },
         ];
 
         for (const check of bookStorageChecks) {
