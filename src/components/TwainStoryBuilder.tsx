@@ -4000,20 +4000,24 @@ const TwainStoryBuilder: React.FC = () => {
           <div className="w-[95%] sm:w-[90%] md:w-[80%] mx-auto">
             {/* Filter buttons - only show when data is loaded */}
             {isDataLoaded && (
-              <div className="flex flex-col sm:flex-row items-center justify-center mb-6 gap-4">
+              <div className="flex flex-col sm:flex-row items-center justify-center mb-6 gap-4 w-full">
                 <ButtonGroup
                   variant="outlined"
                   aria-label="filter books and stories"
                   sx={{
+                    width: { xs: "100%", sm: "auto" },
                     "& .MuiButton-root": {
                       fontFamily: "'Rubik', sans-serif",
                       textTransform: "none",
-                      fontSize: "14px",
+                      fontSize: { xs: "12px", sm: "14px" },
                       fontWeight: 500,
-                      px: 3,
+                      px: { xs: 2, sm: 3 },
                       py: 1,
                       borderColor: "rgb(209, 213, 219)",
                       color: "rgb(107, 114, 128)",
+                      flex: { xs: 1, sm: "initial" },
+                      whiteSpace: "nowrap",
+                      minWidth: 0,
                       "&:hover": {
                         borderColor: "rgb(19, 135, 194)",
                         backgroundColor: "rgba(19, 135, 194, 0.04)",
@@ -4055,7 +4059,8 @@ const TwainStoryBuilder: React.FC = () => {
                   getUniqueSeriesNames(books).length > 0 && (
                     <FormControl
                       sx={{
-                        minWidth: 200,
+                        minWidth: { xs: "100%", sm: 200 },
+                        width: { xs: "100%", sm: "auto" },
                         "& .MuiOutlinedInput-root": {
                           fontFamily: "'Rubik', sans-serif",
                           fontSize: "14px",
