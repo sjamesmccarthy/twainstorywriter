@@ -4044,9 +4044,10 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             </div>
                           )}
 
-                        {/* Import Story Link - Only show in book writing mode and if there are QuickStories */}
+                        {/* Import Story Link - Only show in book writing mode, if there are QuickStories, and for professional plan */}
                         {!isQuickStoryMode &&
-                          availableQuickStoryContent.length > 0 && (
+                          availableQuickStoryContent.length > 0 &&
+                          planType === "professional" && (
                             <div className="mt-3 flex justify-center">
                               <div
                                 onClick={handleImportStoryClick}
@@ -4314,9 +4315,10 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                               )}
                             </Typography>
 
-                            {/* Import Story Link in empty state - Only show in book writing mode and if there are QuickStories */}
+                            {/* Import Story Link in empty state - Only show in book writing mode, if there are QuickStories, and for professional plan */}
                             {!isQuickStoryMode &&
-                              availableQuickStoryContent.length > 0 && (
+                              availableQuickStoryContent.length > 0 &&
+                              planType === "professional" && (
                                 <div className="mt-3 flex justify-center">
                                   <div
                                     onClick={handleImportStoryClick}
