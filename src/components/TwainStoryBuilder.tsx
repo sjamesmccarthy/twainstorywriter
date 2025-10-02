@@ -1519,9 +1519,9 @@ const TwainStoryBuilder: React.FC = () => {
 
                   {/* Contributors Section */}
                   <div className="mt-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
+                    <div className="mb-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-2">
+                        <div className="flex items-center gap-2">
                           <Typography
                             variant="h6"
                             sx={{
@@ -1543,46 +1543,76 @@ const TwainStoryBuilder: React.FC = () => {
                             />
                           )}
                         </div>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontFamily: "'Rubik', sans-serif",
-                            color:
+                        <div className="hidden sm:block">
+                          <Button
+                            onClick={handleAddContributor}
+                            variant="outlined"
+                            startIcon={<AddIcon />}
+                            disabled={
+                              managedBookContributors.length >= 10 ||
                               planType !== "professional"
-                                ? "rgb(156, 163, 175)"
-                                : "rgb(107, 114, 128)",
-                            fontSize: "14px",
-                          }}
-                        >
-                          Add up to 10 contributors. They&apos;ll display in the
-                          order you enter below.
-                        </Typography>
+                            }
+                            sx={{
+                              textTransform: "none",
+                              fontFamily: "'Rubik', sans-serif",
+                              borderColor: "rgb(19, 135, 194)",
+                              color: "rgb(19, 135, 194)",
+                              "&:hover": {
+                                borderColor: "rgb(15, 108, 155)",
+                                backgroundColor: "rgba(19, 135, 194, 0.04)",
+                              },
+                              "&:disabled": {
+                                borderColor: "rgb(209, 213, 219)",
+                                color: "rgb(156, 163, 175)",
+                              },
+                            }}
+                          >
+                            Add Contributor
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        onClick={handleAddContributor}
-                        variant="outlined"
-                        startIcon={<AddIcon />}
-                        disabled={
-                          managedBookContributors.length >= 10 ||
-                          planType !== "professional"
-                        }
+                      <Typography
+                        variant="body2"
                         sx={{
-                          textTransform: "none",
                           fontFamily: "'Rubik', sans-serif",
-                          borderColor: "rgb(19, 135, 194)",
-                          color: "rgb(19, 135, 194)",
-                          "&:hover": {
-                            borderColor: "rgb(15, 108, 155)",
-                            backgroundColor: "rgba(19, 135, 194, 0.04)",
-                          },
-                          "&:disabled": {
-                            borderColor: "rgb(209, 213, 219)",
-                            color: "rgb(156, 163, 175)",
-                          },
+                          color:
+                            planType !== "professional"
+                              ? "rgb(156, 163, 175)"
+                              : "rgb(107, 114, 128)",
+                          fontSize: "14px",
+                          mb: 2,
                         }}
                       >
-                        Add Contributor
-                      </Button>
+                        Add up to 10 contributors. They&apos;ll display in the
+                        order you enter below.
+                      </Typography>
+                      <div className="block sm:hidden">
+                        <Button
+                          onClick={handleAddContributor}
+                          variant="outlined"
+                          startIcon={<AddIcon />}
+                          disabled={
+                            managedBookContributors.length >= 10 ||
+                            planType !== "professional"
+                          }
+                          sx={{
+                            textTransform: "none",
+                            fontFamily: "'Rubik', sans-serif",
+                            borderColor: "rgb(19, 135, 194)",
+                            color: "rgb(19, 135, 194)",
+                            "&:hover": {
+                              borderColor: "rgb(15, 108, 155)",
+                              backgroundColor: "rgba(19, 135, 194, 0.04)",
+                            },
+                            "&:disabled": {
+                              borderColor: "rgb(209, 213, 219)",
+                              color: "rgb(156, 163, 175)",
+                            },
+                          }}
+                        >
+                          Add Contributor
+                        </Button>
+                      </div>
                     </div>
 
                     {/* Contributors List */}

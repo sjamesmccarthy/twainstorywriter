@@ -44,7 +44,7 @@ const AboutPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col text-center">
       {/* Header with Profile Menu */}
       <div className="relative">
         <TwainPageHeader
