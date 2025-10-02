@@ -37,6 +37,7 @@ const feedbackAreas = [
   { value: "stories", label: "Stories" },
   { value: "chapters", label: "Chapters" },
   { value: "parts", label: "Parts" },
+  { value: "note-cards", label: "Note & Plot Cards" },
   { value: "importing-process", label: "Importing Process" },
   { value: "writing-tool", label: "Writing tool (the editor)" },
   { value: "creating-book-process", label: "Creating a Book Process" },
@@ -178,7 +179,7 @@ const FeedbackPage: React.FC = () => {
       <div className="relative">
         <TwainPageHeader
           title="Feedback"
-          subtitle="Help us improve Twain Story Writer by sharing your feedback"
+          subtitle="Help us improve Twain Story Writer"
           showBackButton={true}
           onBackClick={handleBackToBookshelf}
         />
@@ -371,7 +372,11 @@ const FeedbackPage: React.FC = () => {
 
                   {/* Submit Button */}
                   <Box
-                    sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}
+                    sx={{
+                      display: "flex",
+                      justifyContent: { xs: "stretch", md: "flex-end" },
+                      mt: 3,
+                    }}
                   >
                     <Button
                       type="submit"
@@ -386,6 +391,7 @@ const FeedbackPage: React.FC = () => {
                         },
                         px: 4,
                         py: 1.5,
+                        width: { xs: "100%", md: "auto" },
                       }}
                     >
                       {isSubmitting ? "Submitting..." : "Submit Feedback"}

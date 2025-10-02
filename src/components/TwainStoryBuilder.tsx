@@ -4137,7 +4137,7 @@ const TwainStoryBuilder: React.FC = () => {
 
             {/* Centered login content */}
             <div className="flex-1 flex flex-col justify-center px-6 md:px-12">
-              <div className="space-y-6 pl-4 pr-4 py-8 md:pl-20 md:pr-8 md:py-12">
+              <div className="space-y-6 pl-4 pr-4 py-8 md:pl-20 md:pr-8 md:py-12 text-center md:text-left">
                 <Typography
                   variant="body1"
                   sx={{
@@ -4157,11 +4157,12 @@ const TwainStoryBuilder: React.FC = () => {
                   sx={{
                     color: "#1f2937",
                     fontFamily: "'Crimson-Text', serif",
-                    fontWeight: 400,
+                    fontWeight: 200,
                     letterSpacing: 0,
                     fontStretch: "100%",
                     lineHeight: 1.2,
                     marginBottom: "24px",
+                    fontSize: { xs: "1.5rem", md: "2.125rem" },
                   }}
                 >
                   Log in to Twain Story Writer

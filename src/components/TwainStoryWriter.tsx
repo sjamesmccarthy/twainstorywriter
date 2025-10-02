@@ -2810,8 +2810,8 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
 
   const handleEditNoteCard = (noteCard: NoteCard) => {
     setEditingNoteCard(noteCard);
-    setNoteCardContent(noteCard.content);
-    setNoteCardTitle(noteCard.title);
+    setNoteCardContent(noteCard.content || "");
+    setNoteCardTitle(noteCard.title || "");
     setNoteCardId(noteCard.id); // Set the existing ID for editing
     setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
     setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
@@ -2843,8 +2843,8 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
       );
       if (noteCard) {
         setEditingNoteCard(noteCard);
-        setNoteCardContent(noteCard.content);
-        setNoteCardTitle(noteCard.title);
+        setNoteCardContent(noteCard.content || "");
+        setNoteCardTitle(noteCard.title || "");
         setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
         setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
         setSelectedNoteCardChapterIds(noteCard.linkedChapterIds || []);
@@ -2863,8 +2863,8 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
       );
       if (noteCard) {
         setEditingNoteCard(noteCard);
-        setNoteCardContent(noteCard.content);
-        setNoteCardTitle(noteCard.title);
+        setNoteCardContent(noteCard.content || "");
+        setNoteCardTitle(noteCard.title || "");
         setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
         setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
         setSelectedNoteCardChapterIds(noteCard.linkedChapterIds || []);
@@ -2883,8 +2883,8 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
       );
       if (noteCard) {
         setEditingNoteCard(noteCard);
-        setNoteCardContent(noteCard.content);
-        setNoteCardTitle(noteCard.title);
+        setNoteCardContent(noteCard.content || "");
+        setNoteCardTitle(noteCard.title || "");
         setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
         setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
         setSelectedNoteCardChapterIds(noteCard.linkedChapterIds || []);
@@ -5011,14 +5011,29 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                       onDrop={(e) => handleNoteCardDrop(e, noteCard.id)}
                       onDragEnd={handleNoteCardDragEnd}
                       onClick={(e) => {
-                        // Only open modal if not inline editing and not clicking on linked items
-                        if (
-                          inlineEditingNoteCardId !== noteCard.id &&
-                          !(e.target as HTMLElement).closest(
-                            "[data-no-card-click]"
-                          )
-                        ) {
-                          handleEditNoteCard(noteCard);
+                        // On mobile, always open modal when tapping the card
+                        // On desktop, only open modal if not inline editing and not clicking on linked items
+                        const isMobile = window.innerWidth < 768;
+
+                        if (isMobile) {
+                          // Mobile: always open modal unless clicking on menu or linked items
+                          if (
+                            !(e.target as HTMLElement).closest(
+                              "[data-no-card-click]"
+                            )
+                          ) {
+                            handleEditNoteCard(noteCard);
+                          }
+                        } else {
+                          // Desktop: existing behavior
+                          if (
+                            inlineEditingNoteCardId !== noteCard.id &&
+                            !(e.target as HTMLElement).closest(
+                              "[data-no-card-click]"
+                            )
+                          ) {
+                            handleEditNoteCard(noteCard);
+                          }
                         }
                       }}
                     >
@@ -5104,7 +5119,13 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                           />
                         ) : (
                           <div
-                            onClick={(e) => handleInlineEditStart(noteCard, e)}
+                            onClick={(e) => {
+                              // On mobile, don't trigger inline edit (modal will open from card click)
+                              const isMobile = window.innerWidth < 768;
+                              if (!isMobile) {
+                                handleInlineEditStart(noteCard, e);
+                              }
+                            }}
                             className="w-full h-full cursor-text"
                           >
                             <Typography
@@ -5480,6 +5501,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             sx={{
                               fontSize: 20,
                               color: "rgb(107, 114, 128)",
+                              display: { xs: "none", sm: "block" },
                             }}
                           />
                         ) : activity.type === "character" ? (
@@ -5487,6 +5509,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             sx={{
                               fontSize: 20,
                               color: "rgb(107, 114, 128)",
+                              display: { xs: "none", sm: "block" },
                             }}
                           />
                         ) : activity.type === "outline" ? (
@@ -5494,6 +5517,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             sx={{
                               fontSize: 20,
                               color: "rgb(107, 114, 128)",
+                              display: { xs: "none", sm: "block" },
                             }}
                           />
                         ) : activity.type === "story" ? (
@@ -5501,6 +5525,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             sx={{
                               fontSize: 20,
                               color: "rgb(107, 114, 128)",
+                              display: { xs: "none", sm: "block" },
                             }}
                           />
                         ) : activity.type === "chapter" ? (
@@ -5508,6 +5533,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             sx={{
                               fontSize: 20,
                               color: "rgb(107, 114, 128)",
+                              display: { xs: "none", sm: "block" },
                             }}
                           />
                         ) : activity.type === "part" ? (
@@ -5515,6 +5541,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             sx={{
                               fontSize: 20,
                               color: "rgb(107, 114, 128)",
+                              display: { xs: "none", sm: "block" },
                             }}
                           />
                         ) : activity.type === "notecard" ? (
@@ -5522,6 +5549,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             sx={{
                               fontSize: 20,
                               color: "rgb(217, 119, 6)", // amber color for note cards
+                              display: { xs: "none", sm: "block" },
                             }}
                           />
                         ) : (
@@ -5529,6 +5557,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             sx={{
                               fontSize: 20,
                               color: "rgb(107, 114, 128)",
+                              display: { xs: "none", sm: "block" },
                             }}
                           />
                         )}
@@ -5539,7 +5568,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                               sx={{
                                 fontFamily: "'Rubik', sans-serif",
                                 fontWeight: 500,
-                                fontSize: "14px",
+                                fontSize: { xs: "12px", sm: "14px" },
                                 color: getActionColor(),
                                 textTransform: "capitalize",
                               }}
@@ -5551,7 +5580,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                               sx={{
                                 fontFamily: "'Rubik', sans-serif",
                                 fontWeight: 400,
-                                fontSize: "14px",
+                                fontSize: { xs: "12px", sm: "14px" },
                                 color: "#1f2937",
                               }}
                             >
@@ -5565,7 +5594,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             sx={{
                               fontFamily: "'Rubik', sans-serif",
                               fontWeight: 400,
-                              fontSize: "12px",
+                              fontSize: { xs: "11px", sm: "12px" },
                               color: "rgb(107, 114, 128)",
                               marginTop: "2px",
                             }}
@@ -7270,7 +7299,6 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                     )
                   }
                 >
-                  <MenuItem value="story">Story</MenuItem>
                   <MenuItem value="chapter">Chapter</MenuItem>
                   <MenuItem value="outline">Outline</MenuItem>
                 </Select>
@@ -7351,9 +7379,19 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                 p: 2,
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "flex-end",
+                justifyContent: "space-between",
               }}
             >
+              <Typography
+                id="create-notecard-modal-title"
+                variant="h6"
+                sx={{
+                  fontFamily: "'Rubik', sans-serif",
+                  fontWeight: 500,
+                }}
+              >
+                Note & Plot Card
+              </Typography>
               <IconButton
                 onClick={handleCreateNoteCardModalClose}
                 sx={{

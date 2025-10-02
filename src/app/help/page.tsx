@@ -280,7 +280,7 @@ const HelpPage: React.FC = () => {
       <div className="relative">
         <TwainPageHeader
           title="Help & Support"
-          subtitle="Find answers to common questions and learn how to make the most of Twain Story Writer"
+          subtitle="Learn how to make the most of Twain Story Writer"
           showBackButton={true}
           onBackClick={handleBackToBookshelf}
         />

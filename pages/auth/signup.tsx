@@ -1,5 +1,7 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
+import { signIn } from "next-auth/react";
+import Image from "next/image";
 import {
   Container,
   Paper,
@@ -9,6 +11,7 @@ import {
   Box,
   Alert,
   Divider,
+  Chip,
 } from "@mui/material";
 
 export default function SignupPage() {
@@ -70,6 +73,27 @@ export default function SignupPage() {
     <Container maxWidth="sm" sx={{ mt: 8, mb: 4 }}>
       <Paper elevation={3} sx={{ p: 4 }}>
         <Box textAlign="center" mb={3}>
+          <Box sx={{ position: "relative", display: "inline-block", mb: 2 }}>
+            <Image
+              src="/images/twain-logo.png"
+              alt="Twain Logo"
+              width={50}
+              height={50}
+            />
+            <Chip
+              label="BETA"
+              color="primary"
+              size="small"
+              sx={{
+                fontWeight: "bold",
+                position: "absolute",
+                bottom: -8,
+                right: -16,
+                fontSize: "0.65rem",
+                height: "18px",
+              }}
+            />
+          </Box>
           <Typography variant="h4" component="h1" gutterBottom>
             Request Access
           </Typography>
@@ -91,45 +115,43 @@ export default function SignupPage() {
           </Alert>
         )}
 
-        {!message && (
-          <form onSubmit={handleSubmit}>
-            <TextField
-              fullWidth
-              label="Email Address"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              margin="normal"
-              disabled={!!router.query.email}
-              helperText={
-                router.query.email
-                  ? "This email was detected from your Google sign-in attempt"
-                  : "Please enter your Gmail address"
-              }
-            />
+        <form onSubmit={handleSubmit}>
+          <TextField
+            fullWidth
+            label="Email Address"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            margin="normal"
+            disabled={!!router.query.email}
+            helperText={
+              router.query.email
+                ? "This email was detected from your Google sign-in attempt"
+                : "Please enter your Gmail address"
+            }
+          />
 
-            <TextField
-              fullWidth
-              label="Full Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              margin="normal"
-              helperText="Please enter your full name as you'd like it to appear in the application"
-            />
+          <TextField
+            fullWidth
+            label="Full Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            margin="normal"
+            helperText="Please enter your full name as you'd like it to appear in the application"
+          />
 
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-              disabled={loading}
-            >
-              {loading ? "Submitting Request..." : "Request Access"}
-            </Button>
-          </form>
-        )}
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            sx={{ mt: 3, mb: 2 }}
+            disabled={loading}
+          >
+            {loading ? "Submitting Request..." : "Request Access"}
+          </Button>
+        </form>
 
         <Divider sx={{ my: 3 }} />
 
