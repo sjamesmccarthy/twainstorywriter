@@ -40,6 +40,7 @@ import TabletAndroidOutlinedIcon from "@mui/icons-material/TabletAndroidOutlined
 import Image from "next/image";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import TwainStoryWriter from "./TwainStoryWriter";
+import TwainDeleteConfirmationModal from "./TwainDeleteConfirmationModal";
 import TwainStoryPricingModal, {
   ProfessionalFeatureChip,
 } from "./TwainStoryPricingModal";
@@ -316,6 +317,11 @@ const TwainStoryBuilder: React.FC = () => {
   const [notification, setNotification] = useState<string>("");
   const [showPricing, setShowPricing] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{
+    book: Book;
+    isStory: boolean;
+  } | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -433,6 +439,53 @@ const TwainStoryBuilder: React.FC = () => {
 
   const handleCloseExportModal = () => {
     setShowExportModal(false);
+  };
+
+  const handleOpenDeleteModal = (book: Book, isStory: boolean = false) => {
+    setItemToDelete({ book, isStory });
+    setShowDeleteModal(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setShowDeleteModal(false);
+    setItemToDelete(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!itemToDelete) return;
+
+    const { book, isStory } = itemToDelete;
+
+    if (isStory) {
+      // Handle quick story deletion
+      const updatedQuickStories = quickStories.filter((s) => s.id !== book.id);
+      setQuickStories(updatedQuickStories);
+      if (session?.user?.email) {
+        saveQuickStoriesToStorage(updatedQuickStories, session.user.email);
+        // Clean up all related localStorage data for this quick story
+        cleanupBookData(book.id, session.user.email, true);
+      }
+      showNotification(`"${book.title}" story has been deleted.`);
+      console.log("Story deleted successfully:", book.title);
+    } else {
+      // Handle book deletion
+      const updatedBooks = books.filter((b) => b.id !== book.id);
+      setBooks(updatedBooks);
+      if (session?.user?.email) {
+        saveBooksToStorage(updatedBooks, session.user.email);
+        // Clean up all related localStorage data for this book
+        cleanupBookData(book.id, session.user.email, false);
+      }
+      showNotification(`"${book.title}" has been deleted.`);
+      console.log("Book deleted successfully:", book.title);
+
+      // If we're deleting the currently selected book, go back to bookshelf
+      if (selectedBook && selectedBook.id === book.id) {
+        handleBackToBookshelf();
+      }
+    }
+
+    handleCloseDeleteModal();
   };
 
   const handleLogout = () => {
@@ -887,40 +940,39 @@ const TwainStoryBuilder: React.FC = () => {
     }
   };
 
-  const handleDeleteBook = () => {
-    if (
-      selectedBook &&
-      window.confirm(
-        `Are you sure you want to permanently delete "${selectedBook.title}"?`
-      )
-    ) {
-      const updatedBooks = books.filter((book) => book.id !== selectedBook.id);
-      setBooks(updatedBooks);
-      if (session?.user?.email) {
-        saveBooksToStorage(updatedBooks, session.user.email);
-      }
+  // Helper function to clean up all localStorage data for a book
+  const cleanupBookData = (
+    bookId: number,
+    userEmail: string,
+    isQuickStory: boolean = false
+  ) => {
+    const dataTypes = [
+      "ideas",
+      "characters",
+      "chapters",
+      "stories",
+      "outlines",
+      "parts",
+      "recent-activity",
+    ];
 
-      showNotification(`"${selectedBook.title}" has been deleted.`);
-      console.log("Book deleted successfully:", selectedBook.title);
-      handleBackToBookshelf();
+    const prefix = isQuickStory ? "quickstory" : "book";
+
+    dataTypes.forEach((type) => {
+      const storageKey = `twain-${prefix}-${type}-${bookId}-${userEmail}`;
+      localStorage.removeItem(storageKey);
+      console.log(`Removed localStorage key: ${storageKey}`);
+    });
+  };
+
+  const handleDeleteBook = () => {
+    if (selectedBook) {
+      handleOpenDeleteModal(selectedBook, false);
     }
   };
 
   const handleDeleteStory = (story: Book) => {
-    if (
-      window.confirm(
-        `Are you sure you want to permanently delete "${story.title}"?`
-      )
-    ) {
-      const updatedQuickStories = quickStories.filter((s) => s.id !== story.id);
-      setQuickStories(updatedQuickStories);
-      if (session?.user?.email) {
-        saveQuickStoriesToStorage(updatedQuickStories, session.user.email);
-      }
-
-      showNotification(`"${story.title}" story has been deleted.`);
-      console.log("Story deleted successfully:", story.title);
-    }
+    handleOpenDeleteModal(story, true);
   };
 
   const handleWriteBook = (book: Book) => {
@@ -2624,6 +2676,14 @@ const TwainStoryBuilder: React.FC = () => {
             </Box>
           </Modal>
 
+          {/* Delete Confirmation Modal */}
+          <TwainDeleteConfirmationModal
+            open={showDeleteModal}
+            onClose={handleCloseDeleteModal}
+            onConfirm={handleConfirmDelete}
+            itemToDelete={itemToDelete}
+          />
+
           {/* Pricing Modal - Available for manage book view */}
           <TwainStoryPricingModal
             open={showPricing}
@@ -3978,6 +4038,14 @@ const TwainStoryBuilder: React.FC = () => {
             {notification}
           </div>
         )}
+
+        {/* Delete Confirmation Modal - Available for bookshelf view */}
+        <TwainDeleteConfirmationModal
+          open={showDeleteModal}
+          onClose={handleCloseDeleteModal}
+          onConfirm={handleConfirmDelete}
+          itemToDelete={itemToDelete}
+        />
 
         {/* Pricing Modal - Available for logged-in users */}
         <TwainStoryPricingModal

@@ -284,21 +284,21 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
   const [expandedAccordions, setExpandedAccordions] = useState<Set<string>>(
     new Set()
   ); // Start with all collapsed
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(isQuickStoryMode);
   const [sidebarExpandedFromIcon, setSidebarExpandedFromIcon] = useState(false);
 
-  // Check for mobile screen size
+  // Check for mobile screen size and quick story mode
   useEffect(() => {
     const checkMobile = () => {
-      if (window.innerWidth < 768) {
-        setSidebarCollapsed(true); // Auto-collapse on mobile
+      if (window.innerWidth < 768 || isQuickStoryMode) {
+        setSidebarCollapsed(true); // Auto-collapse on mobile or in quick story mode
       }
     };
 
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
-  }, []);
+  }, [isQuickStoryMode]);
 
   // Timer-related state
   const [timerModalOpen, setTimerModalOpen] = useState(false);
@@ -2413,18 +2413,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
   };
 
   const accordionSections = isQuickStoryMode
-    ? [
-        {
-          title: "STORIES",
-          content: "Write and develop your complete stories...",
-          icon: (
-            <HistoryEduOutlinedIcon
-              sx={{ fontSize: 24, color: "rgb(107, 114, 128)" }}
-            />
-          ),
-          createHandler: handleCreateStoryClick,
-        },
-      ]
+    ? []
     : [
         {
           title: "IDEAS",
@@ -2479,7 +2468,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
         {
           title: "PARTS",
           content:
-            "Organize your story into parts. Parts are made up of chapters or multiple stories...",
+            "Organize your story into parts. Parts are made up of chapters or multiple stories.",
           icon: (
             <FolderCopyIcon
               sx={{ fontSize: 24, color: "rgb(107, 114, 128)" }}
@@ -2720,8 +2709,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                       backgroundColor: "rgb(249, 250, 251)",
                     }}
                   >
-                    {section.title === "IDEAS" &&
-                    (ideas.length > 0 || planType === "professional") ? (
+                    {section.title === "IDEAS" && ideas.length > 0 ? (
                       <div className="space-y-3">
                         {ideas.map((idea) => (
                           <div
@@ -2799,7 +2787,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                         )}
                       </div>
                     ) : section.title === "CHARACTERS" &&
-                      (characters.length > 0 || planType === "professional") ? (
+                      characters.length > 0 ? (
                       <div className="space-y-3">
                         {characters.map((character) => {
                           const styling = getCharacterStyling(character.gender);
@@ -3477,56 +3465,58 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
             </div>
 
             {/* Import File Button - Fixed at Bottom */}
-            <div className="border-t border-gray-200 p-4">
-              <div className="relative">
-                <div
-                  className={`flex items-center gap-3 p-3 bg-white rounded-md border border-gray-200 cursor-pointer hover:bg-gray-50 ${
-                    planType !== "professional"
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
-                  onClick={
-                    planType === "professional"
-                      ? handleImportFileClick
-                      : undefined
-                  }
-                >
-                  <FileUploadOutlinedIcon
-                    sx={{
-                      fontSize: 24,
-                      color:
-                        planType === "professional"
-                          ? "rgb(19, 135, 194)"
-                          : "rgb(156, 163, 175)",
-                    }}
-                  />
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontFamily: "'Rubik', sans-serif",
-                      fontWeight: 500,
-                      fontSize: "14px",
-                      color:
-                        planType === "professional"
-                          ? "#1f2937"
-                          : "rgb(156, 163, 175)",
-                      lineHeight: 1.4,
-                    }}
+            {!isQuickStoryMode && (
+              <div className="border-t border-gray-200 p-4">
+                <div className="relative">
+                  <div
+                    className={`flex items-center gap-3 p-3 bg-white rounded-md border border-gray-200 cursor-pointer hover:bg-gray-50 ${
+                      planType !== "professional"
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                    }`}
+                    onClick={
+                      planType === "professional"
+                        ? handleImportFileClick
+                        : undefined
+                    }
                   >
-                    Import Word® or Text File
-                  </Typography>
-                </div>
-                {planType !== "professional" && (
-                  <div className="absolute right-2" style={{ top: "-8px" }}>
-                    <ProfessionalFeatureChip
-                      label="Professional Feature"
-                      onClick={() => setPricingModalOpen(true)}
-                      size="small"
+                    <FileUploadOutlinedIcon
+                      sx={{
+                        fontSize: 24,
+                        color:
+                          planType === "professional"
+                            ? "rgb(19, 135, 194)"
+                            : "rgb(156, 163, 175)",
+                      }}
                     />
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontFamily: "'Rubik', sans-serif",
+                        fontWeight: 500,
+                        fontSize: "14px",
+                        color:
+                          planType === "professional"
+                            ? "#1f2937"
+                            : "rgb(156, 163, 175)",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Import Word® or Text File
+                    </Typography>
                   </div>
-                )}
+                  {planType !== "professional" && (
+                    <div className="absolute right-2" style={{ top: "-8px" }}>
+                      <ProfessionalFeatureChip
+                        label="Professional Feature"
+                        onClick={() => setPricingModalOpen(true)}
+                        size="small"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -3668,46 +3658,48 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
             })}
 
             {/* Import File Button - At the bottom */}
-            <div className="mt-auto mb-4">
-              <Tooltip
-                title="Import File - Upload DOCX or Text files to add to your project"
-                placement="right"
-                arrow
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      backgroundColor: "black !important",
-                      color: "white !important",
-                      fontSize: "16px !important",
-                      fontWeight: 200,
-                      fontFamily: "'Rubik', sans-serif",
-                      padding: "16px !important",
-                      maxWidth: "300px",
+            {!isQuickStoryMode && (
+              <div className="mt-auto mb-4">
+                <Tooltip
+                  title="Import File - Upload DOCX or Text files to add to your project"
+                  placement="right"
+                  arrow
+                  slotProps={{
+                    tooltip: {
+                      sx: {
+                        backgroundColor: "black !important",
+                        color: "white !important",
+                        fontSize: "16px !important",
+                        fontWeight: 200,
+                        fontFamily: "'Rubik', sans-serif",
+                        padding: "16px !important",
+                        maxWidth: "300px",
+                      },
                     },
-                  },
-                  arrow: {
-                    sx: {
-                      color: "black !important",
-                    },
-                  },
-                }}
-              >
-                <IconButton
-                  onClick={handleImportFileClick}
-                  sx={{
-                    color: "rgb(107, 114, 128)",
-                    padding: "8px",
-                    borderRadius: "8px",
-                    "&:hover": {
-                      backgroundColor: "rgba(107, 114, 128, 0.1)",
-                      color: "rgb(19, 135, 194)",
+                    arrow: {
+                      sx: {
+                        color: "black !important",
+                      },
                     },
                   }}
                 >
-                  <FileUploadOutlinedIcon sx={{ fontSize: 24 }} />
-                </IconButton>
-              </Tooltip>
-            </div>
+                  <IconButton
+                    onClick={handleImportFileClick}
+                    sx={{
+                      color: "rgb(107, 114, 128)",
+                      padding: "8px",
+                      borderRadius: "8px",
+                      "&:hover": {
+                        backgroundColor: "rgba(107, 114, 128, 0.1)",
+                        color: "rgb(19, 135, 194)",
+                      },
+                    }}
+                  >
+                    <FileUploadOutlinedIcon sx={{ fontSize: 24 }} />
+                  </IconButton>
+                </Tooltip>
+              </div>
+            )}
           </div>
         )}
       </div>
