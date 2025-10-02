@@ -26,6 +26,7 @@ import {
   ListItemText,
   Tooltip,
   Slider,
+  Menu,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -48,6 +49,8 @@ import HistoryEduIcon from "@mui/icons-material/HistoryEdu";
 import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import DataSaverOnOutlinedIcon from "@mui/icons-material/DataSaverOnOutlined";
 import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
+import LibraryAddOutlinedIcon from "@mui/icons-material/LibraryAddOutlined";
+import MoreHorizOutlinedIcon from "@mui/icons-material/MoreHorizOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import HistoryEduOutlinedIcon from "@mui/icons-material/HistoryEduOutlined";
 import TwainStoryPricingModal, {
@@ -117,10 +120,27 @@ interface Part {
 
 interface RecentActivity {
   id: string; // Unique ID for the log entry, not linked to the actual item
-  type: "idea" | "character" | "story" | "chapter" | "outline" | "part";
+  type:
+    | "idea"
+    | "character"
+    | "story"
+    | "chapter"
+    | "outline"
+    | "part"
+    | "notecard";
   title: string; // Title of the item when the action occurred
   action: "created" | "modified" | "deleted";
   timestamp: Date; // When this log entry was created
+}
+
+interface NoteCard {
+  id: string;
+  title: string;
+  content: string;
+  linkedIdeaIds: string[];
+  linkedCharacterIds: string[];
+  createdAt: Date;
+  color?: "yellow" | "red" | "blue" | "green" | "gray";
 }
 
 // Type definitions - should match the ones in TwainStoryBuilder
@@ -169,6 +189,42 @@ const getStorageKey = (
   const prefix = isQuickStoryMode ? "quickstory" : "book";
   if (!userEmail) return `twain-${prefix}-${type}-${bookId}`;
   return `twain-${prefix}-${type}-${bookId}-${userEmail}`;
+};
+
+// Note card color helper
+const getNoteCardColorClasses = (
+  color: "yellow" | "red" | "blue" | "green" | "gray" = "yellow"
+) => {
+  const colorMap = {
+    yellow: {
+      bg: "bg-yellow-50",
+      border: "border-yellow-200",
+      hover: "hover:bg-yellow-100",
+    },
+    red: {
+      bg: "bg-red-50",
+      border: "border-red-200",
+      hover: "hover:bg-red-100",
+    },
+    blue: {
+      bg: "bg-blue-50",
+      border: "border-blue-200",
+      hover: "hover:bg-blue-100",
+    },
+    green: {
+      bg: "bg-green-50",
+      border: "border-green-200",
+      hover: "hover:bg-green-100",
+    },
+    gray: {
+      bg: "bg-gray-50",
+      border: "border-gray-200",
+      hover: "hover:bg-gray-100",
+    },
+  };
+
+  const colors = colorMap[color];
+  return `relative w-full aspect-square p-4 rounded-lg border ${colors.bg} ${colors.border} ${colors.hover} cursor-pointer flex flex-col justify-between`;
 };
 
 // Storage utilities
@@ -338,6 +394,30 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
 
   // Pricing modal state
   const [pricingModalOpen, setPricingModalOpen] = useState(false);
+
+  // Note Cards state
+  const [noteCards, setNoteCards] = useState<NoteCard[]>([]);
+  const [createNoteCardModalOpen, setCreateNoteCardModalOpen] = useState(false);
+  const [noteCardContent, setNoteCardContent] = useState("");
+  const [noteCardTitle, setNoteCardTitle] = useState("");
+  const [editingNoteCard, setEditingNoteCard] = useState<NoteCard | null>(null);
+  const [noteCardId, setNoteCardId] = useState<string | null>(null);
+  const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>([]);
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>(
+    []
+  );
+  const [inlineEditingNoteCardId, setInlineEditingNoteCardId] = useState<
+    string | null
+  >(null);
+  const [inlineEditContent, setInlineEditContent] = useState("");
+  const [noteCardMenuAnchorEl, setNoteCardMenuAnchorEl] =
+    useState<null | HTMLElement>(null);
+  const [selectedNoteCardForMenu, setSelectedNoteCardForMenu] = useState<
+    string | null
+  >(null);
+  const [selectedNoteCardColor, setSelectedNoteCardColor] = useState<
+    "yellow" | "red" | "blue" | "green" | "gray"
+  >("yellow");
 
   const quillInitializedRef = useRef(false);
 
@@ -559,6 +639,36 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
           setParts(parsedParts);
         } catch (error) {
           console.error("Failed to parse stored parts:", error);
+        }
+      }
+    }
+  }, [book.id, session?.user?.email, isQuickStoryMode]);
+
+  // Load note cards from localStorage on component mount
+  useEffect(() => {
+    if (session?.user?.email) {
+      const storageKey = getStorageKey(
+        "notecards",
+        book.id,
+        session.user.email,
+        isQuickStoryMode
+      );
+      const storedNoteCards = localStorage.getItem(storageKey);
+      if (storedNoteCards) {
+        try {
+          const parsedNoteCards = JSON.parse(storedNoteCards).map(
+            (
+              noteCard: Omit<NoteCard, "createdAt"> & { createdAt: string }
+            ) => ({
+              ...noteCard,
+              linkedIdeaIds: noteCard.linkedIdeaIds || [],
+              linkedCharacterIds: noteCard.linkedCharacterIds || [],
+              createdAt: new Date(noteCard.createdAt),
+            })
+          );
+          setNoteCards(parsedNoteCards);
+        } catch (error) {
+          console.error("Failed to parse stored note cards:", error);
         }
       }
     }
@@ -1196,10 +1306,12 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
   ]);
 
   const handleEditIdea = (idea: Idea) => {
+    console.log("handleEditIdea called with:", idea);
     setEditingIdea(idea);
     setIdeaTitle(idea.title);
     setIdeaNotes(idea.notes);
     setCreateIdeaModalOpen(true);
+    console.log("Idea modal should be opening");
   };
 
   const handleCreateIdeaClick = () => {
@@ -1280,6 +1392,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
   };
 
   const handleEditCharacter = (character: Character) => {
+    console.log("handleEditCharacter called with:", character);
     setEditingCharacter(character);
     setCharacterName(character.name);
     setCharacterGender(character.gender);
@@ -1292,6 +1405,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     setCharacterMisc(character.misc);
     setCharacterAvatar(character.avatar || null);
     setCreateCharacterModalOpen(true);
+    console.log("Character modal should be opening");
   };
 
   const handleCreateCharacterClick = () => {
@@ -2254,6 +2368,346 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     setPricingModalOpen(false);
     // You could add actual upgrade logic here
     console.log("Upgrade to:", planType);
+  };
+
+  // Note Card handlers
+  const handleCreateNoteCardClick = () => {
+    setEditingNoteCard(null);
+    setNoteCardId(Date.now().toString()); // Generate unique ID
+    setCreateNoteCardModalOpen(true);
+  };
+
+  const handleCreateNoteCardModalClose = () => {
+    setCreateNoteCardModalOpen(false);
+    setNoteCardContent("");
+    setNoteCardTitle("");
+    setEditingNoteCard(null);
+    setNoteCardId(null);
+    setSelectedIdeaIds([]);
+    setSelectedCharacterIds([]);
+    setSelectedNoteCardColor("yellow");
+  };
+
+  const handleCreateNoteCard = () => {
+    if (noteCardId || editingNoteCard) {
+      if (editingNoteCard) {
+        // Update existing note card
+        const updatedNoteCard: NoteCard = {
+          ...editingNoteCard,
+          title: noteCardTitle.trim(), // Use provided title (can be empty)
+          content: noteCardContent.trim(),
+          linkedIdeaIds: selectedIdeaIds,
+          linkedCharacterIds: selectedCharacterIds,
+          color: selectedNoteCardColor,
+        };
+
+        const updatedNoteCards = noteCards.map((noteCard) =>
+          noteCard.id === editingNoteCard.id ? updatedNoteCard : noteCard
+        );
+        setNoteCards(updatedNoteCards);
+
+        // Store in localStorage
+        if (session?.user?.email) {
+          const storageKey = getStorageKey(
+            "notecards",
+            book.id,
+            session.user.email,
+            isQuickStoryMode
+          );
+          localStorage.setItem(storageKey, JSON.stringify(updatedNoteCards));
+        }
+
+        // Add to recent activity for note card modification
+        addToRecentActivity(
+          "notecard",
+          updatedNoteCard.title || null,
+          "modified"
+        );
+      } else if (noteCardId) {
+        // Create new note card (only if noteCardId exists)
+        const newNoteCard: NoteCard = {
+          id: noteCardId, // Use the pre-generated ID
+          title: noteCardTitle.trim() || null, // Use null if no title provided
+          content: noteCardContent.trim(),
+          linkedIdeaIds: selectedIdeaIds,
+          linkedCharacterIds: selectedCharacterIds,
+          createdAt: new Date(),
+          color: selectedNoteCardColor,
+        };
+
+        const updatedNoteCards = [...noteCards, newNoteCard];
+        setNoteCards(updatedNoteCards);
+
+        // Store in localStorage
+        if (session?.user?.email) {
+          const storageKey = getStorageKey(
+            "notecards",
+            book.id,
+            session.user.email,
+            isQuickStoryMode
+          );
+          localStorage.setItem(storageKey, JSON.stringify(updatedNoteCards));
+        }
+
+        // Add to recent activity
+        addToRecentActivity("notecard", newNoteCard.title || null, "created");
+      }
+
+      handleCreateNoteCardModalClose();
+    }
+  };
+
+  const handleEditNoteCard = (noteCard: NoteCard) => {
+    setEditingNoteCard(noteCard);
+    setNoteCardContent(noteCard.content);
+    setNoteCardTitle(noteCard.title);
+    setNoteCardId(noteCard.id); // Set the existing ID for editing
+    setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
+    setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
+    setSelectedNoteCardColor(noteCard.color || "yellow");
+    setCreateNoteCardModalOpen(true);
+  };
+
+  // Note Card Menu Handlers
+  const handleNoteCardMenuOpen = (
+    event: React.MouseEvent<HTMLElement>,
+    noteCardId: string
+  ) => {
+    event.stopPropagation();
+    setNoteCardMenuAnchorEl(event.currentTarget);
+    setSelectedNoteCardForMenu(noteCardId);
+  };
+
+  const handleNoteCardMenuClose = () => {
+    setNoteCardMenuAnchorEl(null);
+    setSelectedNoteCardForMenu(null);
+  };
+
+  const handleNoteCardMenuIncludeIdea = () => {
+    if (selectedNoteCardForMenu) {
+      // Find the note card and set it for editing to include ideas
+      const noteCard = noteCards.find(
+        (nc) => nc.id === selectedNoteCardForMenu
+      );
+      if (noteCard) {
+        setEditingNoteCard(noteCard);
+        setNoteCardContent(noteCard.content);
+        setNoteCardTitle(noteCard.title);
+        setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
+        setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
+        setSelectedNoteCardColor(noteCard.color || "yellow");
+        setCreateNoteCardModalOpen(true);
+      }
+    }
+    handleNoteCardMenuClose();
+  };
+
+  const handleNoteCardMenuIncludeCharacter = () => {
+    if (selectedNoteCardForMenu) {
+      // Find the note card and set it for editing to include characters
+      const noteCard = noteCards.find(
+        (nc) => nc.id === selectedNoteCardForMenu
+      );
+      if (noteCard) {
+        setEditingNoteCard(noteCard);
+        setNoteCardContent(noteCard.content);
+        setNoteCardTitle(noteCard.title);
+        setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
+        setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
+        setSelectedNoteCardColor(noteCard.color || "yellow");
+        setCreateNoteCardModalOpen(true);
+      }
+    }
+    handleNoteCardMenuClose();
+  };
+
+  const handleNoteCardMenuDelete = () => {
+    if (selectedNoteCardForMenu) {
+      handleDeleteNoteCard(selectedNoteCardForMenu, {} as React.MouseEvent);
+    }
+    handleNoteCardMenuClose();
+  };
+
+  const handleNoteCardColorChange = (
+    color: "yellow" | "red" | "blue" | "green" | "gray"
+  ) => {
+    if (selectedNoteCardForMenu) {
+      const updatedNoteCards = noteCards.map((noteCard) =>
+        noteCard.id === selectedNoteCardForMenu
+          ? { ...noteCard, color }
+          : noteCard
+      );
+      setNoteCards(updatedNoteCards);
+
+      // Update localStorage
+      if (session?.user?.email) {
+        const storageKey = getStorageKey(
+          "notecards",
+          book.id,
+          session.user.email,
+          isQuickStoryMode
+        );
+        localStorage.setItem(storageKey, JSON.stringify(updatedNoteCards));
+      }
+
+      // Add to recent activity
+      const noteCard = noteCards.find(
+        (nc) => nc.id === selectedNoteCardForMenu
+      );
+      addToRecentActivity("notecard", noteCard?.title || null, "modified");
+    }
+    handleNoteCardMenuClose();
+  };
+
+  const handleDeleteNoteCard = (
+    noteCardId: string,
+    event: React.MouseEvent
+  ) => {
+    event.stopPropagation(); // Prevent triggering the edit handler
+
+    // Find the note card to get its title for activity tracking
+    const noteCardToDelete = noteCards.find(
+      (noteCard) => noteCard.id === noteCardId
+    );
+
+    // Remove note card from state
+    const updatedNoteCards = noteCards.filter(
+      (noteCard) => noteCard.id !== noteCardId
+    );
+    setNoteCards(updatedNoteCards);
+
+    // Update localStorage
+    if (session?.user?.email) {
+      const storageKey = getStorageKey(
+        "notecards",
+        book.id,
+        session.user.email,
+        isQuickStoryMode
+      );
+      localStorage.setItem(storageKey, JSON.stringify(updatedNoteCards));
+    }
+
+    // Add to recent activity if note card was found
+    if (noteCardToDelete) {
+      addToRecentActivity(
+        "notecard",
+        noteCardToDelete.title || null,
+        "deleted"
+      );
+    }
+  };
+
+  const handleRemoveIdeaFromNoteCard = (
+    noteCardId: string,
+    ideaId: string,
+    event: React.MouseEvent
+  ) => {
+    event.stopPropagation();
+
+    const updatedNoteCards = noteCards.map((noteCard) =>
+      noteCard.id === noteCardId
+        ? {
+            ...noteCard,
+            linkedIdeaIds: noteCard.linkedIdeaIds.filter((id) => id !== ideaId),
+          }
+        : noteCard
+    );
+    setNoteCards(updatedNoteCards);
+
+    // Update localStorage
+    if (session?.user?.email) {
+      const storageKey = getStorageKey(
+        "notecards",
+        book.id,
+        session.user.email,
+        isQuickStoryMode
+      );
+      localStorage.setItem(storageKey, JSON.stringify(updatedNoteCards));
+    }
+  };
+
+  const handleRemoveCharacterFromNoteCard = (
+    noteCardId: string,
+    characterId: string,
+    event: React.MouseEvent
+  ) => {
+    event.stopPropagation();
+
+    const updatedNoteCards = noteCards.map((noteCard) =>
+      noteCard.id === noteCardId
+        ? {
+            ...noteCard,
+            linkedCharacterIds: noteCard.linkedCharacterIds.filter(
+              (id) => id !== characterId
+            ),
+          }
+        : noteCard
+    );
+    setNoteCards(updatedNoteCards);
+
+    // Update localStorage
+    if (session?.user?.email) {
+      const storageKey = getStorageKey(
+        "notecards",
+        book.id,
+        session.user.email,
+        isQuickStoryMode
+      );
+      localStorage.setItem(storageKey, JSON.stringify(updatedNoteCards));
+    }
+  };
+
+  const handleInlineEditStart = (
+    noteCard: NoteCard,
+    event: React.MouseEvent
+  ) => {
+    event.stopPropagation(); // Prevent triggering the card click
+    setInlineEditingNoteCardId(noteCard.id);
+    setInlineEditContent(noteCard.content);
+  };
+
+  const handleInlineEditSave = (noteCardId: string) => {
+    const updatedNoteCards = noteCards.map((noteCard) =>
+      noteCard.id === noteCardId
+        ? { ...noteCard, content: inlineEditContent.trim() }
+        : noteCard
+    );
+    setNoteCards(updatedNoteCards);
+
+    // Update localStorage
+    if (session?.user?.email) {
+      const storageKey = getStorageKey(
+        "notecards",
+        book.id,
+        session.user.email,
+        isQuickStoryMode
+      );
+      localStorage.setItem(storageKey, JSON.stringify(updatedNoteCards));
+    }
+
+    // Add to recent activity
+    const noteCard = noteCards.find((nc) => nc.id === inlineEditingNoteCardId);
+    addToRecentActivity("notecard", noteCard?.title || null, "modified");
+
+    // Exit editing mode
+    setInlineEditingNoteCardId(null);
+    setInlineEditContent("");
+  };
+
+  const handleInlineEditCancel = () => {
+    setInlineEditingNoteCardId(null);
+    setInlineEditContent("");
+  };
+
+  const handleInlineEditKeyDown = (
+    event: React.KeyboardEvent,
+    noteCardId: string
+  ) => {
+    if (event.key === "Enter" && event.ctrlKey) {
+      handleInlineEditSave(noteCardId);
+    } else if (event.key === "Escape") {
+      handleInlineEditCancel();
+    }
   };
 
   const handleImportFile = async () => {
@@ -4010,6 +4464,397 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
               </Typography>
             </div>
 
+            {/* Note Cards */}
+            <div className="mb-8 mt-8">
+              <div className="mb-4 flex items-center justify-between">
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontFamily: "'Rubik', sans-serif",
+                    fontWeight: 600,
+                    fontSize: "18px",
+                    color: "#1f2937",
+                  }}
+                >
+                  Note & Plot Cards
+                </Typography>
+                <IconButton
+                  onClick={handleCreateNoteCardClick}
+                  size="small"
+                  sx={{
+                    color: "rgb(107, 114, 128)",
+                    padding: "4px",
+                    "&:hover": {
+                      color: "rgb(59, 130, 246)",
+                      backgroundColor: "rgba(59, 130, 246, 0.1)",
+                    },
+                  }}
+                >
+                  <LibraryAddOutlinedIcon sx={{ fontSize: "20px" }} />
+                </IconButton>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {noteCards.map((noteCard: NoteCard) => (
+                  <div
+                    key={noteCard.id}
+                    className={getNoteCardColorClasses(noteCard.color)}
+                    onClick={(e) => {
+                      // Only open modal if not inline editing and not clicking on linked items
+                      if (
+                        inlineEditingNoteCardId !== noteCard.id &&
+                        !(e.target as HTMLElement).closest(
+                          "[data-no-card-click]"
+                        )
+                      ) {
+                        handleEditNoteCard(noteCard);
+                      }
+                    }}
+                  >
+                    {/* Menu button in upper right */}
+                    <div
+                      className="absolute top-2 right-2 mt-1 mr-1"
+                      data-no-card-click
+                    >
+                      <IconButton
+                        onClick={(e) => handleNoteCardMenuOpen(e, noteCard.id)}
+                        size="small"
+                        sx={{
+                          color: noteCard.title
+                            ? "rgba(255, 255, 255, 0.9)"
+                            : "rgba(107, 114, 128, 0.8)",
+                          padding: "4px",
+                          "&:hover": {
+                            color: noteCard.title ? "white" : "rgb(75, 85, 99)",
+                            backgroundColor: noteCard.title
+                              ? "rgba(0, 0, 0, 0.3)"
+                              : "rgba(0, 0, 0, 0.1)",
+                          },
+                        }}
+                      >
+                        <MoreHorizOutlinedIcon sx={{ fontSize: "16px" }} />
+                      </IconButton>
+                    </div>
+
+                    {/* Title section - shown if title exists */}
+                    {noteCard.title && (
+                      <div
+                        className="mb-2 p-2 -mx-2 -mt-2 rounded-lg"
+                        style={{
+                          backgroundColor:
+                            noteCard.color === "yellow"
+                              ? "#fbbf24"
+                              : noteCard.color === "red"
+                              ? "#f87171"
+                              : noteCard.color === "blue"
+                              ? "#60a5fa"
+                              : noteCard.color === "green"
+                              ? "#34d399"
+                              : "#9ca3af",
+                        }}
+                      >
+                        <Typography
+                          variant="subtitle2"
+                          sx={{
+                            fontFamily: "'Rubik', sans-serif",
+                            fontWeight: 600,
+                            fontSize: "12px",
+                            color: "white",
+                            textAlign: "center",
+                          }}
+                        >
+                          {noteCard.title}
+                        </Typography>
+                      </div>
+                    )}
+
+                    <div className="flex-1 overflow-hidden">
+                      {inlineEditingNoteCardId === noteCard.id ? (
+                        <textarea
+                          value={inlineEditContent}
+                          onChange={(e) => setInlineEditContent(e.target.value)}
+                          onKeyDown={(e) =>
+                            handleInlineEditKeyDown(e, noteCard.id)
+                          }
+                          onBlur={() => handleInlineEditSave(noteCard.id)}
+                          autoFocus
+                          className="w-full h-full resize-none border-none outline-none bg-transparent text-gray-600 text-sm leading-relaxed p-0"
+                          style={{
+                            fontFamily: "'Rubik', sans-serif",
+                            fontSize: "14px",
+                          }}
+                          placeholder="Click to edit content..."
+                        />
+                      ) : (
+                        <div
+                          onClick={(e) => handleInlineEditStart(noteCard, e)}
+                          className="w-full h-full cursor-text"
+                        >
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontFamily: "'Rubik', sans-serif",
+                              fontWeight: 400,
+                              fontSize: "14px",
+                              color: "rgb(107, 114, 128)",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 8,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {noteCard.content || "Click to add content..."}
+                          </Typography>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-2 space-y-1" data-no-card-click>
+                      {/* Linked Ideas */}
+                      {noteCard.linkedIdeaIds?.map((ideaId) => {
+                        const idea = ideas.find((i) => i.id === ideaId);
+                        if (!idea) return null;
+                        return (
+                          <div
+                            key={ideaId}
+                            className="flex items-center justify-between bg-blue-50 rounded px-2 py-1.5 min-h-[28px]"
+                          >
+                            <div
+                              className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-blue-100 rounded px-1 -mx-1"
+                              onClick={() => handleEditIdea(idea)}
+                            >
+                              <BatchPredictionIcon
+                                sx={{
+                                  fontSize: 12,
+                                  color: "rgb(59, 130, 246)",
+                                }}
+                              />
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontFamily: "'Rubik', sans-serif",
+                                  fontSize: "10px",
+                                  color: "rgb(59, 130, 246)",
+                                  fontWeight: 500,
+                                }}
+                                className="truncate"
+                              >
+                                {idea.title}
+                              </Typography>
+                            </div>
+                            <IconButton
+                              onClick={(e) =>
+                                handleRemoveIdeaFromNoteCard(
+                                  noteCard.id,
+                                  ideaId,
+                                  e
+                                )
+                              }
+                              size="small"
+                              sx={{
+                                color: "rgb(156, 163, 175)",
+                                padding: "2px",
+                                "&:hover": {
+                                  color: "rgb(239, 68, 68)",
+                                },
+                              }}
+                            >
+                              <DeleteOutlinedIcon sx={{ fontSize: "10px" }} />
+                            </IconButton>
+                          </div>
+                        );
+                      })}
+
+                      {/* Linked Characters */}
+                      {noteCard.linkedCharacterIds?.map((characterId) => {
+                        const character = characters.find(
+                          (c) => c.id === characterId
+                        );
+                        if (!character) return null;
+                        return (
+                          <div
+                            key={characterId}
+                            className="flex items-center justify-between bg-pink-50 rounded px-2 py-1.5 min-h-[28px]"
+                          >
+                            <div
+                              className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-pink-100 rounded px-1 -mx-1"
+                              onClick={() => handleEditCharacter(character)}
+                            >
+                              <FaceOutlinedIcon
+                                sx={{
+                                  fontSize: 12,
+                                  color: "rgb(236, 72, 153)",
+                                }}
+                              />
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontFamily: "'Rubik', sans-serif",
+                                  fontSize: "10px",
+                                  color: "rgb(236, 72, 153)",
+                                  fontWeight: 500,
+                                }}
+                                className="truncate"
+                              >
+                                {character.name}
+                              </Typography>
+                            </div>
+                            <IconButton
+                              onClick={(e) =>
+                                handleRemoveCharacterFromNoteCard(
+                                  noteCard.id,
+                                  characterId,
+                                  e
+                                )
+                              }
+                              size="small"
+                              sx={{
+                                color: "rgb(156, 163, 175)",
+                                padding: "2px",
+                                "&:hover": {
+                                  color: "rgb(239, 68, 68)",
+                                },
+                              }}
+                            >
+                              <DeleteOutlinedIcon sx={{ fontSize: "10px" }} />
+                            </IconButton>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {noteCards.length === 0 && (
+                  <div className="text-center">
+                    <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: "'Rubik', sans-serif",
+                          fontWeight: 400,
+                          fontSize: "14px",
+                          color: "rgb(107, 114, 128)",
+                        }}
+                      >
+                        No note cards yet. Create your first note card to get
+                        organized!
+                      </Typography>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Note Card Menu */}
+              <Menu
+                anchorEl={noteCardMenuAnchorEl}
+                open={Boolean(noteCardMenuAnchorEl)}
+                onClose={handleNoteCardMenuClose}
+                anchorOrigin={{
+                  vertical: "bottom",
+                  horizontal: "right",
+                }}
+                transformOrigin={{
+                  vertical: "top",
+                  horizontal: "right",
+                }}
+              >
+                <MenuItem onClick={handleNoteCardMenuIncludeIdea}>
+                  <BatchPredictionIcon sx={{ mr: 1, fontSize: 16 }} />
+                  Include Idea
+                </MenuItem>
+                <MenuItem onClick={handleNoteCardMenuIncludeCharacter}>
+                  <FaceOutlinedIcon sx={{ mr: 1, fontSize: 16 }} />
+                  Include Character
+                </MenuItem>
+                <MenuItem
+                  onClick={handleNoteCardMenuDelete}
+                  sx={{ color: "error.main" }}
+                >
+                  <DeleteOutlinedIcon sx={{ mr: 1, fontSize: 16 }} />
+                  Delete Note Card
+                </MenuItem>
+                {/* Color options */}
+                <div
+                  style={{
+                    padding: "8px 16px",
+                    borderTop: "1px solid #e5e7eb",
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontSize: "11px",
+                      color: "text.secondary",
+                      mb: 1,
+                      display: "block",
+                    }}
+                  >
+                    Colors
+                  </Typography>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {(["yellow", "red", "blue", "green", "gray"] as const).map(
+                      (color) => (
+                        <div
+                          key={color}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNoteCardColorChange(color);
+                          }}
+                          style={{
+                            width: "20px",
+                            height: "20px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            border: "1px solid #d1d5db",
+                            backgroundColor:
+                              color === "yellow"
+                                ? "#fef3c7"
+                                : color === "red"
+                                ? "#fecaca"
+                                : color === "blue"
+                                ? "#bfdbfe"
+                                : color === "green"
+                                ? "#bbf7d0"
+                                : "#f3f4f6",
+                            transition: "background-color 0.2s ease-in-out",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              color === "yellow"
+                                ? "#fde68a"
+                                : color === "red"
+                                ? "#fca5a5"
+                                : color === "blue"
+                                ? "#93c5fd"
+                                : color === "green"
+                                ? "#86efac"
+                                : "#e5e7eb";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              color === "yellow"
+                                ? "#fef3c7"
+                                : color === "red"
+                                ? "#fecaca"
+                                : color === "blue"
+                                ? "#bfdbfe"
+                                : color === "green"
+                                ? "#bbf7d0"
+                                : "#f3f4f6";
+                          }}
+                        />
+                      )
+                    )}
+                  </div>
+                </div>
+              </Menu>
+            </div>
+
             {/* Recent Activity */}
             <div className="mb-8 mt-8">
               <div className="mb-4">
@@ -4104,6 +4949,13 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                               color: "rgb(107, 114, 128)",
                             }}
                           />
+                        ) : activity.type === "notecard" ? (
+                          <LibraryAddOutlinedIcon
+                            sx={{
+                              fontSize: 20,
+                              color: "rgb(217, 119, 6)", // amber color for note cards
+                            }}
+                          />
                         ) : (
                           <DescriptionOutlinedIcon
                             sx={{
@@ -4135,7 +4987,9 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                                 color: "#1f2937",
                               }}
                             >
-                              {activity.type}: {activity.title}
+                              {activity.type === "notecard" && !activity.title
+                                ? "Note card"
+                                : `${activity.type}: ${activity.title}`}
                             </Typography>
                           </div>
                           <Typography
@@ -5659,6 +6513,323 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                   }}
                 >
                   Import
+                </Button>
+              </Box>
+            </Box>
+          </Box>
+        </Modal>
+
+        {/* Note Card Modal */}
+        <Modal
+          open={createNoteCardModalOpen}
+          onClose={handleCreateNoteCardModalClose}
+          aria-labelledby="create-notecard-modal-title"
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              top: { xs: 0, sm: "50%" },
+              left: { xs: 0, sm: "50%" },
+              transform: { xs: "none", sm: "translate(-50%, -50%)" },
+              width: { xs: "100%", sm: "75vw" },
+              height: { xs: "100vh", sm: "75vh" },
+              bgcolor: "background.paper",
+              borderRadius: { xs: 0, sm: 3 },
+              overflow: "hidden",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+            }}
+          >
+            {/* Header with same background as page header */}
+            <Box
+              sx={{
+                backgroundColor: "rgb(38, 52, 63)",
+                color: "white",
+                p: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+              }}
+            >
+              <IconButton
+                onClick={handleCreateNoteCardModalClose}
+                sx={{
+                  color: "white",
+                  "&:hover": {
+                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  },
+                }}
+              >
+                <CloseIcon />
+              </IconButton>
+            </Box>
+
+            {/* Modal content */}
+            <Box
+              sx={{
+                p: 4,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "flex-start",
+                height: { xs: "calc(100vh - 80px)", sm: "calc(75vh - 80px)" },
+                overflow: "auto",
+              }}
+            >
+              {/* Title and Color Selection Row */}
+              <Box
+                sx={{
+                  mb: 3,
+                  width: "100%",
+                  display: "flex",
+                  gap: 2,
+                  alignItems: "flex-end",
+                }}
+              >
+                {/* Title Field */}
+                <TextField
+                  label="Title (optional)"
+                  value={noteCardTitle}
+                  onChange={(e) => setNoteCardTitle(e.target.value)}
+                  variant="outlined"
+                  sx={{
+                    flex: 1,
+                    maxWidth: { xs: "100%", sm: "none" },
+                  }}
+                />
+
+                {/* Color Selection */}
+                <Box sx={{ display: "flex", gap: 1, pb: 1 }}>
+                  {(["yellow", "red", "blue", "green", "gray"] as const).map(
+                    (color) => (
+                      <Box
+                        key={color}
+                        onClick={() => setSelectedNoteCardColor(color)}
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 2,
+                          cursor: "pointer",
+                          border:
+                            selectedNoteCardColor === color
+                              ? "3px solid #1976d2"
+                              : "2px solid #d1d5db",
+                          backgroundColor:
+                            color === "yellow"
+                              ? "#fef3c7"
+                              : color === "red"
+                              ? "#fecaca"
+                              : color === "blue"
+                              ? "#bfdbfe"
+                              : color === "green"
+                              ? "#bbf7d0"
+                              : "#f3f4f6",
+                          transition: "all 0.2s ease-in-out",
+                          "&:hover": {
+                            transform: "scale(1.1)",
+                            backgroundColor:
+                              color === "yellow"
+                                ? "#fde68a"
+                                : color === "red"
+                                ? "#fca5a5"
+                                : color === "blue"
+                                ? "#93c5fd"
+                                : color === "green"
+                                ? "#86efac"
+                                : "#e5e7eb",
+                          },
+                        }}
+                      />
+                    )
+                  )}
+                </Box>
+              </Box>
+
+              <TextField
+                fullWidth
+                label="Content"
+                value={noteCardContent}
+                onChange={(e) => setNoteCardContent(e.target.value)}
+                variant="outlined"
+                multiline
+                sx={{
+                  mb: 3,
+                  maxWidth: { xs: "100%", sm: "none" },
+                  flex: 1,
+                  "& .MuiOutlinedInput-root": {
+                    height: "100%",
+                    alignItems: "stretch",
+                  },
+                  "& .MuiOutlinedInput-input": {
+                    height: "100% !important",
+                    overflow: "auto !important",
+                  },
+                }}
+              />
+
+              {/* Ideas Selection */}
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Select Ideas</InputLabel>
+                <Select
+                  multiple
+                  value={selectedIdeaIds}
+                  onChange={(e) =>
+                    setSelectedIdeaIds(
+                      typeof e.target.value === "string"
+                        ? e.target.value.split(",")
+                        : e.target.value
+                    )
+                  }
+                  renderValue={(selected) => (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {selected.map((value) => {
+                        const idea = ideas.find((i) => i.id === value);
+                        return idea ? (
+                          <Box
+                            key={value}
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 0.5,
+                              backgroundColor: "rgba(59, 130, 246, 0.1)",
+                              borderRadius: 1,
+                              px: 1,
+                              py: 0.5,
+                            }}
+                          >
+                            <BatchPredictionIcon
+                              sx={{ fontSize: 12, color: "rgb(59, 130, 246)" }}
+                            />
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: "12px",
+                                color: "rgb(59, 130, 246)",
+                              }}
+                            >
+                              {idea.title}
+                            </Typography>
+                          </Box>
+                        ) : null;
+                      })}
+                    </Box>
+                  )}
+                >
+                  {ideas.map((idea) => (
+                    <MenuItem key={idea.id} value={idea.id}>
+                      <Checkbox
+                        checked={selectedIdeaIds.indexOf(idea.id) > -1}
+                      />
+                      <ListItemText primary={idea.title} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {/* Characters Selection */}
+              <FormControl fullWidth sx={{ mb: 3 }}>
+                <InputLabel>Select Characters</InputLabel>
+                <Select
+                  multiple
+                  value={selectedCharacterIds}
+                  onChange={(e) =>
+                    setSelectedCharacterIds(
+                      typeof e.target.value === "string"
+                        ? e.target.value.split(",")
+                        : e.target.value
+                    )
+                  }
+                  renderValue={(selected) => (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {selected.map((value) => {
+                        const character = characters.find(
+                          (c) => c.id === value
+                        );
+                        return character ? (
+                          <Box
+                            key={value}
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 0.5,
+                              backgroundColor: "rgba(236, 72, 153, 0.1)",
+                              borderRadius: 1,
+                              px: 1,
+                              py: 0.5,
+                            }}
+                          >
+                            <FaceOutlinedIcon
+                              sx={{ fontSize: 12, color: "rgb(236, 72, 153)" }}
+                            />
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: "12px",
+                                color: "rgb(236, 72, 153)",
+                              }}
+                            >
+                              {character.name}
+                            </Typography>
+                          </Box>
+                        ) : null;
+                      })}
+                    </Box>
+                  )}
+                >
+                  {characters.map((character) => (
+                    <MenuItem key={character.id} value={character.id}>
+                      <Checkbox
+                        checked={
+                          selectedCharacterIds.indexOf(character.id) > -1
+                        }
+                      />
+                      <ListItemText primary={character.name} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 2,
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
+              >
+                <Button
+                  onClick={handleCreateNoteCardModalClose}
+                  variant="outlined"
+                  sx={{
+                    flex: 1,
+                    boxShadow: "none",
+                    "&:hover": {
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateNoteCard}
+                  variant="contained"
+                  disabled={!editingNoteCard && !noteCardId}
+                  sx={{
+                    flex: 1,
+                    backgroundColor: "rgb(19, 135, 194)",
+                    textTransform: "none",
+                    fontFamily: "'Rubik', sans-serif",
+                    py: 1.5,
+                    boxShadow: "none",
+                    "&:hover": {
+                      backgroundColor: "rgb(15, 108, 155)",
+                      boxShadow: "none",
+                    },
+                    "&:disabled": {
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  {editingNoteCard ? "Update Note Card" : "Create Note Card"}
                 </Button>
               </Box>
             </Box>
