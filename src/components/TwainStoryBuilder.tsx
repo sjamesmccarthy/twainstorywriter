@@ -4283,99 +4283,158 @@ const TwainStoryBuilder: React.FC = () => {
                       >
                         {/* Hover overlay with icons - covers entire card */}
                         <div
-                          className={`absolute inset-0 bg-black bg-opacity-20 flex flex-col items-center justify-center transition-opacity duration-200 rounded-r-md z-10 ${
+                          className={`absolute inset-0 bg-black bg-opacity-20 flex flex-col transition-opacity duration-200 rounded-r-md z-10 ${
                             isActive
                               ? "opacity-60"
                               : "opacity-0 group-hover:opacity-50"
                           }`}
                         >
-                          {/* Book info - always show */}
-                          <div className="text-center mb-4">
-                            <Typography
-                              variant="body1"
-                              sx={{
-                                fontFamily: "'Alike', serif",
-                                fontSize: "16px",
-                                fontWeight: "bold",
-                                color: "white",
-                                textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-                                mb: 1,
-                              }}
-                            >
-                              {bookData.title}
-                            </Typography>
-                            {bookData.isSeries && bookData.seriesName && (
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontFamily: "'Rubik', sans-serif",
-                                  fontSize: "12px",
-                                  fontWeight: 500,
-                                  color: "rgba(255,255,255,0.95)",
-                                  textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-                                  mb: 0.5,
-                                }}
-                              >
-                                {bookData.seriesName} #{bookData.seriesNumber}
-                              </Typography>
-                            )}
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontFamily: "'Rubik', sans-serif",
-                                fontSize: "13px",
-                                fontWeight: 400,
-                                color: "white",
-                                textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-                              }}
-                            >
-                              {bookData.wordCount} words
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontFamily: "'Rubik', sans-serif",
-                                fontSize: "12px",
-                                fontWeight: 300,
-                                color: "rgba(255,255,255,0.9)",
-                                textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-                                mt: 0.25,
-                              }}
-                            >
-                              Started on{" "}
-                              {new Date(
-                                bookData.createdAt
-                              ).toLocaleDateString()}
-                            </Typography>
-                          </div>
+                          {bookData.coverImage ? (
+                            <>
+                              {/* Upper left: Book title, series, and BOOK badge */}
+                              <div className="p-3 flex-shrink-0">
+                                <Typography
+                                  variant="body1"
+                                  sx={{
+                                    fontFamily: "'Alike', serif",
+                                    fontSize: "16px",
+                                    fontWeight: "bold",
+                                    color: "white",
+                                    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+                                    mb: 0.5,
+                                  }}
+                                >
+                                  {bookData.title}
+                                </Typography>
+                                {bookData.isSeries && bookData.seriesName && (
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      fontFamily: "'Rubik', sans-serif",
+                                      fontSize: "11px",
+                                      fontWeight: 500,
+                                      color: "rgba(255,255,255,0.95)",
+                                      textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+                                      mb: 0.5,
+                                    }}
+                                  >
+                                    {bookData.seriesName} #
+                                    {bookData.seriesNumber}
+                                  </Typography>
+                                )}
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontSize: "12px",
+                                    fontWeight: 500,
+                                    color: "white",
+                                    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+                                  }}
+                                >
+                                  BOOK
+                                </Typography>
+                              </div>
 
-                          {/* Action icons */}
-                          <div className="flex items-center space-x-4">
-                            <SettingsOutlinedIcon
-                              onClick={() => handleManageBook(bookData)}
-                              sx={{
-                                fontSize: 32,
-                                color: "white",
-                                cursor: "pointer",
-                                transition: "transform 0.2s ease",
-                                "&:hover": {
-                                  transform: "scale(1.1)",
-                                },
-                              }}
-                            />
-                            <DrawOutlinedIcon
-                              onClick={() => handleWriteBook(bookData)}
-                              sx={{
-                                fontSize: 32,
-                                color: "white",
-                                cursor: "pointer",
-                                transition: "transform 0.2s ease",
-                                "&:hover": {
-                                  transform: "scale(1.1)",
-                                },
-                              }}
-                            />
-                          </div>
+                              {/* Center: Action icons */}
+                              <div
+                                className="flex-1 flex items-center justify-center"
+                                style={{ marginTop: "-25px" }}
+                              >
+                                <div className="flex items-center justify-center space-x-4">
+                                  <SettingsOutlinedIcon
+                                    onClick={() => handleManageBook(bookData)}
+                                    sx={{
+                                      fontSize: 32,
+                                      color: "white",
+                                      cursor: "pointer",
+                                      transition: "transform 0.2s ease",
+                                      "&:hover": {
+                                        transform: "scale(1.1)",
+                                      },
+                                    }}
+                                  />
+                                  <DrawOutlinedIcon
+                                    onClick={() => handleWriteBook(bookData)}
+                                    sx={{
+                                      fontSize: 32,
+                                      color: "white",
+                                      cursor: "pointer",
+                                      transition: "transform 0.2s ease",
+                                      "&:hover": {
+                                        transform: "scale(1.1)",
+                                      },
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Bottom: Word count and started date */}
+                              <div className="text-center px-3 pb-3">
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontSize: "14px",
+                                    fontWeight: 400,
+                                    color: "white",
+                                    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+                                    mb: 0.5,
+                                  }}
+                                >
+                                  {bookData.wordCount} words
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontSize: "12px",
+                                    fontWeight: 300,
+                                    color: "rgba(255,255,255,0.9)",
+                                    textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
+                                  }}
+                                >
+                                  Started on{" "}
+                                  {new Date(
+                                    bookData.createdAt
+                                  ).toLocaleDateString()}
+                                </Typography>
+                              </div>
+                            </>
+                          ) : (
+                            // No cover image - only show centered icons
+                            <div
+                              className="flex items-center justify-center h-full"
+                              style={{ paddingTop: "5px" }}
+                            >
+                              <div className="flex items-center justify-center space-x-4">
+                                <SettingsOutlinedIcon
+                                  onClick={() => handleManageBook(bookData)}
+                                  sx={{
+                                    fontSize: 32,
+                                    color: "white",
+                                    cursor: "pointer",
+                                    transition: "transform 0.2s ease",
+                                    "&:hover": {
+                                      transform: "scale(1.1)",
+                                    },
+                                  }}
+                                />
+                                <DrawOutlinedIcon
+                                  onClick={() => handleWriteBook(bookData)}
+                                  sx={{
+                                    fontSize: 32,
+                                    color: "white",
+                                    cursor: "pointer",
+                                    transition: "transform 0.2s ease",
+                                    "&:hover": {
+                                      transform: "scale(1.1)",
+                                    },
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {bookData.coverImage ? (
@@ -4628,74 +4687,15 @@ const TwainStoryBuilder: React.FC = () => {
                       >
                         {/* Hover overlay with icons - covers entire card */}
                         <div
-                          className={`absolute inset-0 bg-black bg-opacity-20 flex flex-col items-center justify-center transition-opacity duration-200 rounded-r-md z-10 ${
+                          className={`absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center transition-opacity duration-200 rounded-r-md z-10 ${
                             isActive
                               ? "opacity-60"
                               : "opacity-0 group-hover:opacity-50"
                           }`}
+                          style={{ paddingTop: "5px" }}
                         >
-                          {/* Story info */}
-                          <div className="text-center mb-4">
-                            <Typography
-                              variant="body1"
-                              sx={{
-                                fontFamily: "'Alike', serif",
-                                fontSize: "16px",
-                                fontWeight: "bold",
-                                color: "white",
-                                textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-                                mb: 1,
-                              }}
-                            >
-                              {storyData.title}
-                            </Typography>
-                            {storyData.isSeries && storyData.seriesName && (
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontFamily: "'Rubik', sans-serif",
-                                  fontSize: "12px",
-                                  fontWeight: 500,
-                                  color: "rgba(255,255,255,0.95)",
-                                  textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-                                  mb: 0.5,
-                                }}
-                              >
-                                {storyData.seriesName} #{storyData.seriesNumber}
-                              </Typography>
-                            )}
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontFamily: "'Rubik', sans-serif",
-                                fontSize: "13px",
-                                fontWeight: 400,
-                                color: "white",
-                                textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-                              }}
-                            >
-                              {storyData.wordCount} words
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontFamily: "'Rubik', sans-serif",
-                                fontSize: "12px",
-                                fontWeight: 300,
-                                color: "rgba(255,255,255,0.9)",
-                                textShadow: "1px 1px 2px rgba(0,0,0,0.8)",
-                                mt: 0.25,
-                              }}
-                            >
-                              Started on{" "}
-                              {new Date(
-                                storyData.createdAt
-                              ).toLocaleDateString()}
-                            </Typography>
-                          </div>
-
-                          {/* Action icons */}
-                          <div className="flex items-center space-x-4">
+                          {/* Only show centered icons - no additional text needed */}
+                          <div className="flex items-center justify-center space-x-4">
                             <DeleteOutlineOutlinedIcon
                               onClick={(e) => {
                                 e.stopPropagation();
