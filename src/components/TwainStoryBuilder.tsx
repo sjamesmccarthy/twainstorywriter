@@ -263,7 +263,7 @@ const TwainFooter: React.FC = () => {
 const TwainStoryBuilder: React.FC = () => {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { preferences, planType, isActivePlan, updatePlan, recordLogin } =
+  const { planType, isActivePlan, updatePlan, recordLogin } =
     useUserPreferences();
   const [createBookModalOpen, setCreateBookModalOpen] = useState(false);
   const [bookTitle, setBookTitle] = useState("");

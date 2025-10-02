@@ -139,6 +139,7 @@ interface NoteCard {
   content: string;
   linkedIdeaIds: string[];
   linkedCharacterIds: string[];
+  linkedChapterIds: string[];
   createdAt: Date;
   color?: "yellow" | "red" | "blue" | "green" | "gray";
 }
@@ -244,6 +245,44 @@ const saveToStorage = (
   }
 };
 
+// QuickStory utilities
+const getQuickStoriesStorageKey = (userEmail: string): string => {
+  return `twain-story-builder-quickstories-${userEmail}`;
+};
+
+const loadQuickStoriesFromStorage = (userEmail?: string): Book[] => {
+  if (!userEmail) return [];
+  try {
+    const storageKey = getQuickStoriesStorageKey(userEmail);
+    const stored = localStorage.getItem(storageKey);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error("Error loading quick stories from localStorage:", error);
+    return [];
+  }
+};
+
+const loadQuickStoryContent = (
+  quickStoryId: number,
+  userEmail: string
+): Story[] => {
+  try {
+    const storageKey = `twain-quickstory-stories-${quickStoryId}-${userEmail}`;
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.map((story: Story & { createdAt: string }) => ({
+        ...story,
+        createdAt: new Date(story.createdAt),
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error("Error loading quick story content:", error);
+    return [];
+  }
+};
+
 // Helper function to calculate word count from content
 const getItemWordCount = (content: string): number => {
   try {
@@ -342,19 +381,23 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
   ); // Start with all collapsed
   const [sidebarCollapsed, setSidebarCollapsed] = useState(isQuickStoryMode);
   const [sidebarExpandedFromIcon, setSidebarExpandedFromIcon] = useState(false);
+  const [userManuallyToggled, setUserManuallyToggled] = useState(false);
 
   // Check for mobile screen size and quick story mode
   useEffect(() => {
     const checkMobile = () => {
       if (window.innerWidth < 768 || isQuickStoryMode) {
-        setSidebarCollapsed(true); // Auto-collapse on mobile or in quick story mode
+        // Only auto-collapse if user hasn't manually toggled or expanded from icon
+        if (!sidebarExpandedFromIcon && !userManuallyToggled) {
+          setSidebarCollapsed(true);
+        }
       }
     };
 
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
-  }, [isQuickStoryMode]);
+  }, [isQuickStoryMode, sidebarExpandedFromIcon, userManuallyToggled]);
 
   // Timer-related state
   const [timerModalOpen, setTimerModalOpen] = useState(false);
@@ -395,6 +438,23 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
   // Pricing modal state
   const [pricingModalOpen, setPricingModalOpen] = useState(false);
 
+  // Import Story modal state
+  const [importStoryModalOpen, setImportStoryModalOpen] = useState(false);
+  const [selectedStoryIdsForImport, setSelectedStoryIdsForImport] = useState<
+    string[]
+  >([]);
+  const [availableQuickStoryContent, setAvailableQuickStoryContent] = useState<
+    Story[]
+  >([]);
+
+  // Overwrite confirmation modal state
+  const [overwriteConfirmModalOpen, setOverwriteConfirmModalOpen] =
+    useState(false);
+  const [conflictingChapters, setConflictingChapters] = useState<
+    { story: Story; existingChapter: Chapter }[]
+  >([]);
+  const [pendingImportStories, setPendingImportStories] = useState<Story[]>([]);
+
   // Note Cards state
   const [noteCards, setNoteCards] = useState<NoteCard[]>([]);
   const [createNoteCardModalOpen, setCreateNoteCardModalOpen] = useState(false);
@@ -406,6 +466,9 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>(
     []
   );
+  const [selectedNoteCardChapterIds, setSelectedNoteCardChapterIds] = useState<
+    string[]
+  >([]);
   const [inlineEditingNoteCardId, setInlineEditingNoteCardId] = useState<
     string | null
   >(null);
@@ -418,6 +481,14 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
   const [selectedNoteCardColor, setSelectedNoteCardColor] = useState<
     "yellow" | "red" | "blue" | "green" | "gray"
   >("yellow");
+
+  // Drag and drop state for note cards
+  const [draggedNoteCardId, setDraggedNoteCardId] = useState<string | null>(
+    null
+  );
+  const [dragOverNoteCardId, setDragOverNoteCardId] = useState<string | null>(
+    null
+  );
 
   const quillInitializedRef = useRef(false);
 
@@ -663,6 +734,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
               ...noteCard,
               linkedIdeaIds: noteCard.linkedIdeaIds || [],
               linkedCharacterIds: noteCard.linkedCharacterIds || [],
+              linkedChapterIds: noteCard.linkedChapterIds || [],
               createdAt: new Date(noteCard.createdAt),
             })
           );
@@ -673,6 +745,35 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
       }
     }
   }, [book.id, session?.user?.email, isQuickStoryMode]);
+
+  // Load QuickStories for Import Story feature
+  useEffect(() => {
+    if (session?.user?.email && !isQuickStoryMode) {
+      const loadedQuickStories = loadQuickStoriesFromStorage(
+        session.user.email
+      );
+
+      // Load all story content from QuickStories
+      const allQuickStoryContent: Story[] = [];
+      loadedQuickStories.forEach((quickStory) => {
+        if (session.user?.email) {
+          const storyContent = loadQuickStoryContent(
+            quickStory.id,
+            session.user.email
+          );
+          storyContent.forEach((story) => {
+            // Add quickStory info to story for identification
+            allQuickStoryContent.push({
+              ...story,
+              id: `qs-${quickStory.id}-${story.id}`, // Unique ID combining quickstory ID and story ID
+              title: `${quickStory.title}`, // Include quickstory title
+            });
+          });
+        }
+      });
+      setAvailableQuickStoryContent(allQuickStoryContent);
+    }
+  }, [session?.user?.email, isQuickStoryMode]);
 
   // Calculate total word count when chapters, stories, or outlines change
   useEffect(() => {
@@ -788,6 +889,24 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     book.id,
     isQuickStoryMode,
   ]);
+
+  // Auto-open first story in Quick Story mode
+  useEffect(() => {
+    if (
+      isQuickStoryMode &&
+      stories.length > 0 &&
+      !isEditingStory &&
+      !currentStory
+    ) {
+      // Automatically open the first story for editing
+      const firstStory = stories[0];
+      setCurrentStory(firstStory);
+      setIsEditingStory(true);
+
+      // Initialize word count tracking
+      setModificationStartWordCount(0);
+    }
+  }, [isQuickStoryMode, stories, isEditingStory, currentStory]);
 
   // Update recent activity list when refresh counter changes
   useEffect(() => {
@@ -1637,8 +1756,162 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     setCreateChapterModalOpen(true);
   };
 
-  const handleCreateStoryClick = () => {
-    setCreateStoryModalOpen(true);
+  const handleImportStoryClick = () => {
+    // Only allow in book writing mode if there are QuickStories to import
+    if (!isQuickStoryMode && availableQuickStoryContent.length > 0) {
+      setImportStoryModalOpen(true);
+    }
+  };
+
+  const handleImportStoryModalClose = () => {
+    setImportStoryModalOpen(false);
+    setSelectedStoryIdsForImport([]);
+  };
+
+  const handleImportStory = () => {
+    if (selectedStoryIdsForImport.length > 0) {
+      // Get the selected QuickStories
+      const selectedQuickStories = availableQuickStoryContent.filter((story) =>
+        selectedStoryIdsForImport.includes(story.id)
+      );
+
+      // Check for conflicts with existing chapters
+      const conflicts: { story: Story; existingChapter: Chapter }[] = [];
+      const nonConflictingStories: Story[] = [];
+
+      selectedQuickStories.forEach((story) => {
+        const existingChapter = chapters.find(
+          (chapter) =>
+            chapter.title.toLowerCase().trim() ===
+            story.title.toLowerCase().trim()
+        );
+
+        if (existingChapter) {
+          conflicts.push({ story, existingChapter });
+        } else {
+          nonConflictingStories.push(story);
+        }
+      });
+
+      // If there are conflicts, show confirmation modal
+      if (conflicts.length > 0) {
+        setConflictingChapters(conflicts);
+        setPendingImportStories(nonConflictingStories);
+        setOverwriteConfirmModalOpen(true);
+        return;
+      }
+
+      // If no conflicts, proceed with import
+      performImport(selectedQuickStories);
+    }
+  };
+
+  const performImport = (
+    storiesToImport: Story[],
+    overwriteConflicts: boolean = false
+  ) => {
+    // Create new chapters from the selected QuickStories
+    const newChapters: Chapter[] = [];
+    const updatedChapters = [...chapters];
+
+    storiesToImport.forEach((story) => {
+      if (overwriteConflicts) {
+        // Find and replace existing chapter with same name
+        const existingIndex = updatedChapters.findIndex(
+          (chapter) =>
+            chapter.title.toLowerCase().trim() ===
+            story.title.toLowerCase().trim()
+        );
+
+        if (existingIndex !== -1) {
+          // Overwrite existing chapter
+          const updatedChapter: Chapter = {
+            ...updatedChapters[existingIndex], // Keep original ID and createdAt
+            title: story.title,
+            content: story.content,
+          };
+          updatedChapters[existingIndex] = updatedChapter;
+          newChapters.push(updatedChapter);
+        } else {
+          // Create new chapter
+          const newChapter: Chapter = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            title: story.title,
+            content: story.content,
+            createdAt: new Date(),
+          };
+          updatedChapters.push(newChapter);
+          newChapters.push(newChapter);
+        }
+      } else {
+        // Create new chapter
+        const newChapter: Chapter = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          title: story.title,
+          content: story.content,
+          createdAt: new Date(),
+        };
+        updatedChapters.push(newChapter);
+        newChapters.push(newChapter);
+      }
+    });
+
+    // Update chapters
+    setChapters(updatedChapters);
+
+    // Store in localStorage
+    if (session?.user?.email) {
+      const storageKey = getStorageKey(
+        "chapters",
+        book.id,
+        session.user.email,
+        isQuickStoryMode
+      );
+      localStorage.setItem(storageKey, JSON.stringify(updatedChapters));
+    }
+
+    // Add to recent activity for each imported chapter
+    newChapters.forEach((chapter) => {
+      const action = overwriteConflicts ? "modified" : "created";
+      addToRecentActivity("chapter", chapter.title, action);
+    });
+
+    handleImportStoryModalClose();
+  };
+
+  const handleStorySelectionForImport = (storyId: string) => {
+    setSelectedStoryIdsForImport((prev) => {
+      if (prev.includes(storyId)) {
+        return prev.filter((id) => id !== storyId);
+      } else {
+        return [...prev, storyId];
+      }
+    });
+  };
+
+  // Overwrite confirmation handlers
+  const handleOverwriteConfirmClose = () => {
+    setOverwriteConfirmModalOpen(false);
+    setConflictingChapters([]);
+    setPendingImportStories([]);
+  };
+
+  const handleConfirmOverwrite = () => {
+    // Import both conflicting stories (with overwrite) and non-conflicting stories
+    const allStoriesToImport = [
+      ...conflictingChapters.map((c) => c.story),
+      ...pendingImportStories,
+    ];
+    performImport(allStoriesToImport, true);
+    handleOverwriteConfirmClose();
+  };
+
+  const handleSkipConflicts = () => {
+    // Import only non-conflicting stories
+    if (pendingImportStories.length > 0) {
+      performImport(pendingImportStories, false);
+    }
+    handleOverwriteConfirmClose();
   };
 
   const handleCreateStoryModalClose = () => {
@@ -1750,7 +2023,10 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
   };
 
   const handleCreatePart = () => {
-    if (partTitle.trim() && selectedChapterIds.length > 0) {
+    if (
+      partTitle.trim() &&
+      (selectedChapterIds.length > 0 || selectedStoryIds.length > 0)
+    ) {
       if (editingPart) {
         // Update existing part
         const updatedPart: Part = {
@@ -2332,6 +2608,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
 
   const handleToggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed);
+    setUserManuallyToggled(true); // Mark that user manually toggled
     setSidebarExpandedFromIcon(false); // Reset expanded from icon state
   };
 
@@ -2370,8 +2647,75 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     console.log("Upgrade to:", planType);
   };
 
+  // Drag and drop handlers for note cards
+  const handleNoteCardDragStart = (e: React.DragEvent, noteCardId: string) => {
+    setDraggedNoteCardId(noteCardId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleNoteCardDragOver = (e: React.DragEvent, noteCardId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverNoteCardId(noteCardId);
+  };
+
+  const handleNoteCardDragLeave = () => {
+    setDragOverNoteCardId(null);
+  };
+
+  const handleNoteCardDrop = (e: React.DragEvent, dropTargetId: string) => {
+    e.preventDefault();
+
+    if (!draggedNoteCardId || draggedNoteCardId === dropTargetId) {
+      setDraggedNoteCardId(null);
+      setDragOverNoteCardId(null);
+      return;
+    }
+
+    // Find the indices of the dragged and target note cards
+    const draggedIndex = noteCards.findIndex(
+      (nc) => nc.id === draggedNoteCardId
+    );
+    const targetIndex = noteCards.findIndex((nc) => nc.id === dropTargetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    // Create a new array with reordered note cards
+    const updatedNoteCards = [...noteCards];
+    const [draggedCard] = updatedNoteCards.splice(draggedIndex, 1);
+    updatedNoteCards.splice(targetIndex, 0, draggedCard);
+
+    setNoteCards(updatedNoteCards);
+
+    // Update localStorage
+    if (session?.user?.email) {
+      const storageKey = getStorageKey(
+        "notecards",
+        book.id,
+        session.user.email,
+        isQuickStoryMode
+      );
+      localStorage.setItem(storageKey, JSON.stringify(updatedNoteCards));
+    }
+
+    // Reset drag state
+    setDraggedNoteCardId(null);
+    setDragOverNoteCardId(null);
+  };
+
+  const handleNoteCardDragEnd = () => {
+    setDraggedNoteCardId(null);
+    setDragOverNoteCardId(null);
+  };
+
   // Note Card handlers
   const handleCreateNoteCardClick = () => {
+    // Check if freelance user tries to access note cards (Professional only feature)
+    if (planType !== "professional") {
+      setPricingModalOpen(true);
+      return;
+    }
+
     setEditingNoteCard(null);
     setNoteCardId(Date.now().toString()); // Generate unique ID
     setCreateNoteCardModalOpen(true);
@@ -2385,6 +2729,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     setNoteCardId(null);
     setSelectedIdeaIds([]);
     setSelectedCharacterIds([]);
+    setSelectedNoteCardChapterIds([]);
     setSelectedNoteCardColor("yellow");
   };
 
@@ -2394,10 +2739,11 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
         // Update existing note card
         const updatedNoteCard: NoteCard = {
           ...editingNoteCard,
-          title: noteCardTitle.trim(), // Use provided title (can be empty)
+          title: noteCardTitle?.trim() || "", // Use provided title or empty string
           content: noteCardContent.trim(),
           linkedIdeaIds: selectedIdeaIds,
           linkedCharacterIds: selectedCharacterIds,
+          linkedChapterIds: selectedNoteCardChapterIds,
           color: selectedNoteCardColor,
         };
 
@@ -2420,17 +2766,18 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
         // Add to recent activity for note card modification
         addToRecentActivity(
           "notecard",
-          updatedNoteCard.title || null,
+          updatedNoteCard.title || "Untitled",
           "modified"
         );
       } else if (noteCardId) {
         // Create new note card (only if noteCardId exists)
         const newNoteCard: NoteCard = {
           id: noteCardId, // Use the pre-generated ID
-          title: noteCardTitle.trim() || null, // Use null if no title provided
+          title: noteCardTitle?.trim() || "", // Use empty string if no title provided
           content: noteCardContent.trim(),
           linkedIdeaIds: selectedIdeaIds,
           linkedCharacterIds: selectedCharacterIds,
+          linkedChapterIds: selectedNoteCardChapterIds,
           createdAt: new Date(),
           color: selectedNoteCardColor,
         };
@@ -2450,7 +2797,11 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
         }
 
         // Add to recent activity
-        addToRecentActivity("notecard", newNoteCard.title || null, "created");
+        addToRecentActivity(
+          "notecard",
+          newNoteCard.title || "Untitled",
+          "created"
+        );
       }
 
       handleCreateNoteCardModalClose();
@@ -2464,6 +2815,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     setNoteCardId(noteCard.id); // Set the existing ID for editing
     setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
     setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
+    setSelectedNoteCardChapterIds(noteCard.linkedChapterIds || []);
     setSelectedNoteCardColor(noteCard.color || "yellow");
     setCreateNoteCardModalOpen(true);
   };
@@ -2495,6 +2847,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
         setNoteCardTitle(noteCard.title);
         setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
         setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
+        setSelectedNoteCardChapterIds(noteCard.linkedChapterIds || []);
         setSelectedNoteCardColor(noteCard.color || "yellow");
         setCreateNoteCardModalOpen(true);
       }
@@ -2514,6 +2867,27 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
         setNoteCardTitle(noteCard.title);
         setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
         setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
+        setSelectedNoteCardChapterIds(noteCard.linkedChapterIds || []);
+        setSelectedNoteCardColor(noteCard.color || "yellow");
+        setCreateNoteCardModalOpen(true);
+      }
+    }
+    handleNoteCardMenuClose();
+  };
+
+  const handleNoteCardMenuIncludeChapter = () => {
+    if (selectedNoteCardForMenu) {
+      // Find the note card and set it for editing to include chapters
+      const noteCard = noteCards.find(
+        (nc) => nc.id === selectedNoteCardForMenu
+      );
+      if (noteCard) {
+        setEditingNoteCard(noteCard);
+        setNoteCardContent(noteCard.content);
+        setNoteCardTitle(noteCard.title);
+        setSelectedIdeaIds(noteCard.linkedIdeaIds || []);
+        setSelectedCharacterIds(noteCard.linkedCharacterIds || []);
+        setSelectedNoteCardChapterIds(noteCard.linkedChapterIds || []);
         setSelectedNoteCardColor(noteCard.color || "yellow");
         setCreateNoteCardModalOpen(true);
       }
@@ -2523,7 +2897,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
 
   const handleNoteCardMenuDelete = () => {
     if (selectedNoteCardForMenu) {
-      handleDeleteNoteCard(selectedNoteCardForMenu, {} as React.MouseEvent);
+      handleDeleteNoteCard(selectedNoteCardForMenu);
     }
     handleNoteCardMenuClose();
   };
@@ -2554,16 +2928,20 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
       const noteCard = noteCards.find(
         (nc) => nc.id === selectedNoteCardForMenu
       );
-      addToRecentActivity("notecard", noteCard?.title || null, "modified");
+      addToRecentActivity(
+        "notecard",
+        noteCard?.title || "Untitled",
+        "modified"
+      );
     }
     handleNoteCardMenuClose();
   };
 
   const handleDeleteNoteCard = (
     noteCardId: string,
-    event: React.MouseEvent
+    event?: React.MouseEvent
   ) => {
-    event.stopPropagation(); // Prevent triggering the edit handler
+    event?.stopPropagation(); // Prevent triggering the edit handler
 
     // Find the note card to get its title for activity tracking
     const noteCardToDelete = noteCards.find(
@@ -2591,7 +2969,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     if (noteCardToDelete) {
       addToRecentActivity(
         "notecard",
-        noteCardToDelete.title || null,
+        noteCardToDelete.title || "Untitled",
         "deleted"
       );
     }
@@ -2657,6 +3035,37 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     }
   };
 
+  const handleRemoveChapterFromNoteCard = (
+    noteCardId: string,
+    chapterId: string,
+    event: React.MouseEvent
+  ) => {
+    event.stopPropagation();
+
+    const updatedNoteCards = noteCards.map((noteCard) =>
+      noteCard.id === noteCardId
+        ? {
+            ...noteCard,
+            linkedChapterIds: noteCard.linkedChapterIds.filter(
+              (id) => id !== chapterId
+            ),
+          }
+        : noteCard
+    );
+    setNoteCards(updatedNoteCards);
+
+    // Update localStorage
+    if (session?.user?.email) {
+      const storageKey = getStorageKey(
+        "notecards",
+        book.id,
+        session.user.email,
+        isQuickStoryMode
+      );
+      localStorage.setItem(storageKey, JSON.stringify(updatedNoteCards));
+    }
+  };
+
   const handleInlineEditStart = (
     noteCard: NoteCard,
     event: React.MouseEvent
@@ -2687,7 +3096,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
 
     // Add to recent activity
     const noteCard = noteCards.find((nc) => nc.id === inlineEditingNoteCardId);
-    addToRecentActivity("notecard", noteCard?.title || null, "modified");
+    addToRecentActivity("notecard", noteCard?.title || "Untitled", "modified");
 
     // Exit editing mode
     setInlineEditingNoteCardId(null);
@@ -2899,16 +3308,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
           ),
           createHandler: handleCreateOutlineClick,
         },
-        {
-          title: "STORIES",
-          content: "Write and develop your complete stories...",
-          icon: (
-            <HistoryEduOutlinedIcon
-              sx={{ fontSize: 24, color: "rgb(107, 114, 128)" }}
-            />
-          ),
-          createHandler: handleCreateStoryClick,
-        },
+        // Note: STORIES section is hidden in Book Writing mode (when isQuickStoryMode is false)
         {
           title: "CHAPTERS",
           content: "Create and organize your story chapters...",
@@ -3643,6 +4043,22 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                               />
                             </div>
                           )}
+
+                        {/* Import Story Link - Only show in book writing mode and if there are QuickStories */}
+                        {!isQuickStoryMode &&
+                          availableQuickStoryContent.length > 0 && (
+                            <div className="mt-3 flex justify-center">
+                              <div
+                                onClick={handleImportStoryClick}
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:bg-blue-50 rounded-md transition-colors"
+                              >
+                                <AutoStoriesIcon sx={{ fontSize: 16 }} />
+                                <span className="font-medium">
+                                  Import Story
+                                </span>
+                              </div>
+                            </div>
+                          )}
                       </div>
                     ) : section.title === "PARTS" && parts.length > 0 ? (
                       <div className="space-y-3">
@@ -3864,38 +4280,56 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                             )}
                           </Typography>
                         ) : section.title === "CHAPTERS" ? (
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontFamily: "'Rubik', sans-serif",
-                              fontWeight: 400,
-                              fontSize: "13px",
-                              color: "rgb(107, 114, 128)",
-                              lineHeight: 1.5,
-                              textAlign: "center",
-                            }}
-                          >
-                            {planType === "professional"
-                              ? `Professional users can create unlimited Chapters. You currently have ${
-                                  chapters.length
-                                } chapter${
-                                  chapters.length !== 1 ? "s" : ""
-                                }. Create and organize your story chapters here.`
-                              : `Freelance users can create 3 Chapters (${chapters.length}/3 used). Create and organize your story chapters here.`}{" "}
-                            {planType !== "professional" && (
-                              <span
-                                onClick={() => setPricingModalOpen(true)}
-                                style={{
-                                  color: "rgb(19, 135, 194)",
-                                  cursor: "pointer",
-                                  textDecoration: "underline",
-                                }}
-                              >
-                                Professional plans can create unlimited
-                                chapters.
-                              </span>
-                            )}
-                          </Typography>
+                          <>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontFamily: "'Rubik', sans-serif",
+                                fontWeight: 400,
+                                fontSize: "13px",
+                                color: "rgb(107, 114, 128)",
+                                lineHeight: 1.5,
+                                textAlign: "center",
+                              }}
+                            >
+                              {planType === "professional"
+                                ? `Professional users can create unlimited Chapters. You currently have ${
+                                    chapters.length
+                                  } chapter${
+                                    chapters.length !== 1 ? "s" : ""
+                                  }. Create and organize your story chapters here.`
+                                : `Freelance users can create 3 Chapters (${chapters.length}/3 used). Create and organize your story chapters here.`}{" "}
+                              {planType !== "professional" && (
+                                <span
+                                  onClick={() => setPricingModalOpen(true)}
+                                  style={{
+                                    color: "rgb(19, 135, 194)",
+                                    cursor: "pointer",
+                                    textDecoration: "underline",
+                                  }}
+                                >
+                                  Professional plans can create unlimited
+                                  chapters.
+                                </span>
+                              )}
+                            </Typography>
+
+                            {/* Import Story Link in empty state - Only show in book writing mode and if there are QuickStories */}
+                            {!isQuickStoryMode &&
+                              availableQuickStoryContent.length > 0 && (
+                                <div className="mt-3 flex justify-center">
+                                  <div
+                                    onClick={handleImportStoryClick}
+                                    className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:bg-blue-50 rounded-md transition-colors"
+                                  >
+                                    <AutoStoriesIcon sx={{ fontSize: 16 }} />
+                                    <span className="font-medium">
+                                      Import Story
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                          </>
                         ) : (
                           <Typography
                             variant="body2"
@@ -4481,267 +4915,391 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                 <IconButton
                   onClick={handleCreateNoteCardClick}
                   size="small"
+                  disabled={planType !== "professional"}
                   sx={{
-                    color: "rgb(107, 114, 128)",
+                    color:
+                      planType !== "professional"
+                        ? "rgb(156, 163, 175)"
+                        : "rgb(107, 114, 128)",
                     padding: "4px",
                     "&:hover": {
-                      color: "rgb(59, 130, 246)",
-                      backgroundColor: "rgba(59, 130, 246, 0.1)",
+                      color:
+                        planType !== "professional"
+                          ? "rgb(156, 163, 175)"
+                          : "rgb(59, 130, 246)",
+                      backgroundColor:
+                        planType !== "professional"
+                          ? "transparent"
+                          : "rgba(59, 130, 246, 0.1)",
+                    },
+                    "&.Mui-disabled": {
+                      color: "rgb(156, 163, 175)",
                     },
                   }}
                 >
                   <LibraryAddOutlinedIcon sx={{ fontSize: "20px" }} />
                 </IconButton>
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {noteCards.map((noteCard: NoteCard) => (
-                  <div
-                    key={noteCard.id}
-                    className={getNoteCardColorClasses(noteCard.color)}
-                    onClick={(e) => {
-                      // Only open modal if not inline editing and not clicking on linked items
-                      if (
-                        inlineEditingNoteCardId !== noteCard.id &&
-                        !(e.target as HTMLElement).closest(
-                          "[data-no-card-click]"
-                        )
-                      ) {
-                        handleEditNoteCard(noteCard);
-                      }
-                    }}
-                  >
-                    {/* Menu button in upper right */}
-                    <div
-                      className="absolute top-2 right-2 mt-1 mr-1"
-                      data-no-card-click
-                    >
-                      <IconButton
-                        onClick={(e) => handleNoteCardMenuOpen(e, noteCard.id)}
-                        size="small"
-                        sx={{
-                          color: noteCard.title
-                            ? "rgba(255, 255, 255, 0.9)"
-                            : "rgba(107, 114, 128, 0.8)",
-                          padding: "4px",
-                          "&:hover": {
-                            color: noteCard.title ? "white" : "rgb(75, 85, 99)",
-                            backgroundColor: noteCard.title
-                              ? "rgba(0, 0, 0, 0.3)"
-                              : "rgba(0, 0, 0, 0.1)",
-                          },
-                        }}
-                      >
-                        <MoreHorizOutlinedIcon sx={{ fontSize: "16px" }} />
-                      </IconButton>
-                    </div>
 
-                    {/* Title section - shown if title exists */}
-                    {noteCard.title && (
-                      <div
-                        className="mb-2 p-2 -mx-2 -mt-2 rounded-lg"
-                        style={{
-                          backgroundColor:
-                            noteCard.color === "yellow"
-                              ? "#fbbf24"
-                              : noteCard.color === "red"
-                              ? "#f87171"
-                              : noteCard.color === "blue"
-                              ? "#60a5fa"
-                              : noteCard.color === "green"
-                              ? "#34d399"
-                              : "#9ca3af",
+              {planType !== "professional" ? (
+                <div className="text-center w-full">
+                  <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                    {/* <div className="flex items-center justify-center mb-3">
+                      <LibraryAddOutlinedIcon
+                        sx={{
+                          fontSize: "48px",
+                          color: "#000",
                         }}
+                      />
+                    </div> */}
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontFamily: "'Rubik', sans-serif",
+                        fontWeight: 400,
+                        fontSize: "14px",
+                        color: "rgb(107, 114, 128)",
+                        mb: 3,
+                      }}
+                    >
+                      Organize your story with visual note cards. Link ideas,
+                      characters, and chapters with drag-and-drop functionality.
+                      Color-code and reorganize your plot points effortlessly.
+                    </Typography>
+                    <ProfessionalFeatureChip
+                      onClick={() => setPricingModalOpen(true)}
+                      size="medium"
+                      label="Professional Feature"
+                    />
+                  </div>
+                </div>
+              ) : noteCards.length === 0 ? (
+                <div className="text-center w-full">
+                  <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontFamily: "'Rubik', sans-serif",
+                        fontWeight: 400,
+                        fontSize: "14px",
+                        color: "rgb(107, 114, 128)",
+                      }}
+                    >
+                      No note cards yet. Create your first note card to get
+                      organized!
+                    </Typography>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+                  {noteCards.map((noteCard: NoteCard) => (
+                    <div
+                      key={noteCard.id}
+                      className={`${getNoteCardColorClasses(noteCard.color)} ${
+                        dragOverNoteCardId === noteCard.id
+                          ? "ring-2 ring-blue-400 ring-opacity-50"
+                          : ""
+                      } ${
+                        draggedNoteCardId === noteCard.id ? "opacity-50" : ""
+                      }`}
+                      draggable
+                      onDragStart={(e) =>
+                        handleNoteCardDragStart(e, noteCard.id)
+                      }
+                      onDragOver={(e) => handleNoteCardDragOver(e, noteCard.id)}
+                      onDragLeave={handleNoteCardDragLeave}
+                      onDrop={(e) => handleNoteCardDrop(e, noteCard.id)}
+                      onDragEnd={handleNoteCardDragEnd}
+                      onClick={(e) => {
+                        // Only open modal if not inline editing and not clicking on linked items
+                        if (
+                          inlineEditingNoteCardId !== noteCard.id &&
+                          !(e.target as HTMLElement).closest(
+                            "[data-no-card-click]"
+                          )
+                        ) {
+                          handleEditNoteCard(noteCard);
+                        }
+                      }}
+                    >
+                      {/* Menu button in upper right */}
+                      <div
+                        className="absolute top-2 right-2 mt-1 mr-1"
+                        data-no-card-click
                       >
-                        <Typography
-                          variant="subtitle2"
+                        <IconButton
+                          onClick={(e) =>
+                            handleNoteCardMenuOpen(e, noteCard.id)
+                          }
+                          size="small"
                           sx={{
-                            fontFamily: "'Rubik', sans-serif",
-                            fontWeight: 600,
-                            fontSize: "12px",
-                            color: "white",
-                            textAlign: "center",
+                            color: noteCard.title
+                              ? "rgba(255, 255, 255, 0.9)"
+                              : "rgba(107, 114, 128, 0.8)",
+                            padding: "4px",
+                            "&:hover": {
+                              color: noteCard.title
+                                ? "white"
+                                : "rgb(75, 85, 99)",
+                              backgroundColor: noteCard.title
+                                ? "rgba(0, 0, 0, 0.3)"
+                                : "rgba(0, 0, 0, 0.1)",
+                            },
                           }}
                         >
-                          {noteCard.title}
-                        </Typography>
+                          <MoreHorizOutlinedIcon sx={{ fontSize: "16px" }} />
+                        </IconButton>
                       </div>
-                    )}
 
-                    <div className="flex-1 overflow-hidden">
-                      {inlineEditingNoteCardId === noteCard.id ? (
-                        <textarea
-                          value={inlineEditContent}
-                          onChange={(e) => setInlineEditContent(e.target.value)}
-                          onKeyDown={(e) =>
-                            handleInlineEditKeyDown(e, noteCard.id)
-                          }
-                          onBlur={() => handleInlineEditSave(noteCard.id)}
-                          autoFocus
-                          className="w-full h-full resize-none border-none outline-none bg-transparent text-gray-600 text-sm leading-relaxed p-0"
-                          style={{
-                            fontFamily: "'Rubik', sans-serif",
-                            fontSize: "14px",
-                          }}
-                          placeholder="Click to edit content..."
-                        />
-                      ) : (
+                      {/* Title section - shown if title exists */}
+                      {noteCard.title && (
                         <div
-                          onClick={(e) => handleInlineEditStart(noteCard, e)}
-                          className="w-full h-full cursor-text"
+                          className="mb-2 p-2 -mx-2 -mt-2 rounded-lg"
+                          style={{
+                            backgroundColor:
+                              noteCard.color === "yellow"
+                                ? "#fbbf24"
+                                : noteCard.color === "red"
+                                ? "#f87171"
+                                : noteCard.color === "blue"
+                                ? "#60a5fa"
+                                : noteCard.color === "green"
+                                ? "#34d399"
+                                : "#9ca3af",
+                          }}
                         >
                           <Typography
-                            variant="body2"
+                            variant="subtitle2"
                             sx={{
                               fontFamily: "'Rubik', sans-serif",
-                              fontWeight: 400,
-                              fontSize: "14px",
-                              color: "rgb(107, 114, 128)",
-                              display: "-webkit-box",
-                              WebkitLineClamp: 8,
-                              WebkitBoxOrient: "vertical",
-                              overflow: "hidden",
-                              wordBreak: "break-word",
+                              fontWeight: 600,
+                              fontSize: "12px",
+                              color: "white",
+                              textAlign: "center",
                             }}
                           >
-                            {noteCard.content || "Click to add content..."}
+                            {noteCard.title}
                           </Typography>
                         </div>
                       )}
-                    </div>
-                    <div className="mt-2 space-y-1" data-no-card-click>
-                      {/* Linked Ideas */}
-                      {noteCard.linkedIdeaIds?.map((ideaId) => {
-                        const idea = ideas.find((i) => i.id === ideaId);
-                        if (!idea) return null;
-                        return (
-                          <div
-                            key={ideaId}
-                            className="flex items-center justify-between bg-blue-50 rounded px-2 py-1.5 min-h-[28px]"
-                          >
-                            <div
-                              className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-blue-100 rounded px-1 -mx-1"
-                              onClick={() => handleEditIdea(idea)}
-                            >
-                              <BatchPredictionIcon
-                                sx={{
-                                  fontSize: 12,
-                                  color: "rgb(59, 130, 246)",
-                                }}
-                              />
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontFamily: "'Rubik', sans-serif",
-                                  fontSize: "10px",
-                                  color: "rgb(59, 130, 246)",
-                                  fontWeight: 500,
-                                }}
-                                className="truncate"
-                              >
-                                {idea.title}
-                              </Typography>
-                            </div>
-                            <IconButton
-                              onClick={(e) =>
-                                handleRemoveIdeaFromNoteCard(
-                                  noteCard.id,
-                                  ideaId,
-                                  e
-                                )
-                              }
-                              size="small"
-                              sx={{
-                                color: "rgb(156, 163, 175)",
-                                padding: "2px",
-                                "&:hover": {
-                                  color: "rgb(239, 68, 68)",
-                                },
-                              }}
-                            >
-                              <DeleteOutlinedIcon sx={{ fontSize: "10px" }} />
-                            </IconButton>
-                          </div>
-                        );
-                      })}
 
-                      {/* Linked Characters */}
-                      {noteCard.linkedCharacterIds?.map((characterId) => {
-                        const character = characters.find(
-                          (c) => c.id === characterId
-                        );
-                        if (!character) return null;
-                        return (
+                      <div className="flex-1 overflow-hidden">
+                        {inlineEditingNoteCardId === noteCard.id ? (
+                          <textarea
+                            value={inlineEditContent}
+                            onChange={(e) =>
+                              setInlineEditContent(e.target.value)
+                            }
+                            onKeyDown={(e) =>
+                              handleInlineEditKeyDown(e, noteCard.id)
+                            }
+                            onBlur={() => handleInlineEditSave(noteCard.id)}
+                            autoFocus
+                            className="w-full h-full resize-none border-none outline-none bg-transparent text-gray-600 text-sm leading-relaxed p-0"
+                            style={{
+                              fontFamily: "'Rubik', sans-serif",
+                              fontSize: "14px",
+                            }}
+                            placeholder="Click to edit content..."
+                          />
+                        ) : (
                           <div
-                            key={characterId}
-                            className="flex items-center justify-between bg-pink-50 rounded px-2 py-1.5 min-h-[28px]"
+                            onClick={(e) => handleInlineEditStart(noteCard, e)}
+                            className="w-full h-full cursor-text"
                           >
-                            <div
-                              className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-pink-100 rounded px-1 -mx-1"
-                              onClick={() => handleEditCharacter(character)}
-                            >
-                              <FaceOutlinedIcon
-                                sx={{
-                                  fontSize: 12,
-                                  color: "rgb(236, 72, 153)",
-                                }}
-                              />
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontFamily: "'Rubik', sans-serif",
-                                  fontSize: "10px",
-                                  color: "rgb(236, 72, 153)",
-                                  fontWeight: 500,
-                                }}
-                                className="truncate"
-                              >
-                                {character.name}
-                              </Typography>
-                            </div>
-                            <IconButton
-                              onClick={(e) =>
-                                handleRemoveCharacterFromNoteCard(
-                                  noteCard.id,
-                                  characterId,
-                                  e
-                                )
-                              }
-                              size="small"
+                            <Typography
+                              variant="body2"
                               sx={{
-                                color: "rgb(156, 163, 175)",
-                                padding: "2px",
-                                "&:hover": {
-                                  color: "rgb(239, 68, 68)",
-                                },
+                                fontFamily: "'Rubik', sans-serif",
+                                fontWeight: 400,
+                                fontSize: "14px",
+                                color: "rgb(107, 114, 128)",
+                                display: "-webkit-box",
+                                WebkitLineClamp: 8,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                                wordBreak: "break-word",
                               }}
                             >
-                              <DeleteOutlinedIcon sx={{ fontSize: "10px" }} />
-                            </IconButton>
+                              {noteCard.content || "Click to add content..."}
+                            </Typography>
                           </div>
-                        );
-                      })}
+                        )}
+                      </div>
+                      <div className="mt-2 space-y-1" data-no-card-click>
+                        {/* Linked Ideas */}
+                        {noteCard.linkedIdeaIds?.map((ideaId) => {
+                          const idea = ideas.find((i) => i.id === ideaId);
+                          if (!idea) return null;
+                          return (
+                            <div
+                              key={ideaId}
+                              className="flex items-center justify-between bg-blue-50 rounded px-2 py-1.5 min-h-[28px]"
+                            >
+                              <div
+                                className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-blue-100 rounded px-1 -mx-1"
+                                onClick={() => handleEditIdea(idea)}
+                              >
+                                <BatchPredictionIcon
+                                  sx={{
+                                    fontSize: 12,
+                                    color: "rgb(59, 130, 246)",
+                                  }}
+                                />
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontSize: "10px",
+                                    color: "rgb(59, 130, 246)",
+                                    fontWeight: 500,
+                                  }}
+                                  className="truncate"
+                                >
+                                  {idea.title}
+                                </Typography>
+                              </div>
+                              <IconButton
+                                onClick={(e) =>
+                                  handleRemoveIdeaFromNoteCard(
+                                    noteCard.id,
+                                    ideaId,
+                                    e
+                                  )
+                                }
+                                size="small"
+                                sx={{
+                                  color: "rgb(156, 163, 175)",
+                                  padding: "2px",
+                                  "&:hover": {
+                                    color: "rgb(239, 68, 68)",
+                                  },
+                                }}
+                              >
+                                <DeleteOutlinedIcon sx={{ fontSize: "10px" }} />
+                              </IconButton>
+                            </div>
+                          );
+                        })}
+
+                        {/* Linked Characters */}
+                        {noteCard.linkedCharacterIds?.map((characterId) => {
+                          const character = characters.find(
+                            (c) => c.id === characterId
+                          );
+                          if (!character) return null;
+                          return (
+                            <div
+                              key={characterId}
+                              className="flex items-center justify-between bg-pink-50 rounded px-2 py-1.5 min-h-[28px]"
+                            >
+                              <div
+                                className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-pink-100 rounded px-1 -mx-1"
+                                onClick={() => handleEditCharacter(character)}
+                              >
+                                <FaceOutlinedIcon
+                                  sx={{
+                                    fontSize: 12,
+                                    color: "rgb(236, 72, 153)",
+                                  }}
+                                />
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontSize: "10px",
+                                    color: "rgb(236, 72, 153)",
+                                    fontWeight: 500,
+                                  }}
+                                  className="truncate"
+                                >
+                                  {character.name}
+                                </Typography>
+                              </div>
+                              <IconButton
+                                onClick={(e) =>
+                                  handleRemoveCharacterFromNoteCard(
+                                    noteCard.id,
+                                    characterId,
+                                    e
+                                  )
+                                }
+                                size="small"
+                                sx={{
+                                  color: "rgb(156, 163, 175)",
+                                  padding: "2px",
+                                  "&:hover": {
+                                    color: "rgb(239, 68, 68)",
+                                  },
+                                }}
+                              >
+                                <DeleteOutlinedIcon sx={{ fontSize: "10px" }} />
+                              </IconButton>
+                            </div>
+                          );
+                        })}
+
+                        {/* Linked Chapters */}
+                        {noteCard.linkedChapterIds?.map((chapterId) => {
+                          const chapter = chapters.find(
+                            (c) => c.id === chapterId
+                          );
+                          if (!chapter) return null;
+                          return (
+                            <div
+                              key={chapterId}
+                              className="flex items-center justify-between bg-purple-50 rounded px-2 py-1.5 min-h-[28px]"
+                            >
+                              <div
+                                className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-purple-100 rounded px-1 -mx-1"
+                                onClick={() => handleEditChapter(chapter)}
+                              >
+                                <MenuBookOutlinedIcon
+                                  sx={{
+                                    fontSize: 12,
+                                    color: "rgb(147, 51, 234)",
+                                  }}
+                                />
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontFamily: "'Rubik', sans-serif",
+                                    fontSize: "10px",
+                                    color: "rgb(147, 51, 234)",
+                                    fontWeight: 500,
+                                  }}
+                                  className="truncate"
+                                >
+                                  {chapter.title}
+                                </Typography>
+                              </div>
+                              <IconButton
+                                onClick={(e) =>
+                                  handleRemoveChapterFromNoteCard(
+                                    noteCard.id,
+                                    chapterId,
+                                    e
+                                  )
+                                }
+                                size="small"
+                                sx={{
+                                  color: "rgb(156, 163, 175)",
+                                  padding: "2px",
+                                  "&:hover": {
+                                    color: "rgb(239, 68, 68)",
+                                  },
+                                }}
+                              >
+                                <DeleteOutlinedIcon sx={{ fontSize: "10px" }} />
+                              </IconButton>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {noteCards.length === 0 && (
-                  <div className="text-center">
-                    <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontFamily: "'Rubik', sans-serif",
-                          fontWeight: 400,
-                          fontSize: "14px",
-                          color: "rgb(107, 114, 128)",
-                        }}
-                      >
-                        No note cards yet. Create your first note card to get
-                        organized!
-                      </Typography>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
 
               {/* Note Card Menu */}
               <Menu
@@ -4757,14 +5315,24 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                   horizontal: "right",
                 }}
               >
-                <MenuItem onClick={handleNoteCardMenuIncludeIdea}>
-                  <BatchPredictionIcon sx={{ mr: 1, fontSize: 16 }} />
-                  Include Idea
-                </MenuItem>
-                <MenuItem onClick={handleNoteCardMenuIncludeCharacter}>
-                  <FaceOutlinedIcon sx={{ mr: 1, fontSize: 16 }} />
-                  Include Character
-                </MenuItem>
+                {!isQuickStoryMode && (
+                  <MenuItem onClick={handleNoteCardMenuIncludeIdea}>
+                    <BatchPredictionIcon sx={{ mr: 1, fontSize: 16 }} />
+                    Include Idea
+                  </MenuItem>
+                )}
+                {!isQuickStoryMode && (
+                  <MenuItem onClick={handleNoteCardMenuIncludeCharacter}>
+                    <FaceOutlinedIcon sx={{ mr: 1, fontSize: 16 }} />
+                    Include Character
+                  </MenuItem>
+                )}
+                {!isQuickStoryMode && (
+                  <MenuItem onClick={handleNoteCardMenuIncludeChapter}>
+                    <MenuBookOutlinedIcon sx={{ mr: 1, fontSize: 16 }} />
+                    Include Chapter
+                  </MenuItem>
+                )}
                 <MenuItem
                   onClick={handleNoteCardMenuDelete}
                   sx={{ color: "error.main" }}
@@ -5647,6 +6215,242 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
           </Box>
         </Modal>
 
+        {/* Import Story Modal */}
+        <Modal
+          open={importStoryModalOpen}
+          onClose={handleImportStoryModalClose}
+          aria-labelledby="import-story-modal-title"
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              top: { xs: 0, sm: "50%" },
+              left: { xs: 0, sm: "50%" },
+              transform: { xs: "none", sm: "translate(-50%, -50%)" },
+              width: { xs: "100%", sm: 600 },
+              height: { xs: "100vh", sm: "auto" },
+              maxHeight: { xs: "100vh", sm: "80vh" },
+              bgcolor: "background.paper",
+              borderRadius: { xs: 0, sm: 3 },
+              overflow: "hidden",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+            }}
+          >
+            {/* Header with same background as page header */}
+            <Box
+              sx={{
+                backgroundColor: "rgb(38, 52, 63)",
+                color: "white",
+                p: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Typography
+                id="import-story-modal-title"
+                variant="h6"
+                component="h2"
+                sx={{
+                  fontFamily: "'Rubik', sans-serif",
+                  fontWeight: 600,
+                  margin: 0,
+                }}
+              >
+                Import Stories as Chapters
+              </Typography>
+              <IconButton
+                onClick={handleImportStoryModalClose}
+                sx={{
+                  color: "white",
+                  "&:hover": {
+                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  },
+                }}
+              >
+                <CloseIcon />
+              </IconButton>
+            </Box>
+
+            {/* Modal content */}
+            <Box
+              sx={{
+                p: 4,
+                display: "flex",
+                flexDirection: "column",
+                height: { xs: "calc(100vh - 80px)", sm: "auto" },
+                minHeight: { xs: "auto", sm: "400px" },
+                maxHeight: { xs: "auto", sm: "calc(80vh - 80px)" },
+              }}
+            >
+              <Typography
+                variant="body1"
+                sx={{
+                  fontFamily: "'Rubik', sans-serif",
+                  fontSize: "14px",
+                  color: "#6b7280",
+                  mb: 3,
+                  textAlign: "center",
+                }}
+              >
+                Select one or more QuickStories to import as new chapters. Each
+                selected story will become a new chapter.
+              </Typography>
+
+              {/* Stories list */}
+              <Box
+                sx={{
+                  flex: 1,
+                  overflowY: "auto",
+                  mb: 3,
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  p: 2,
+                }}
+              >
+                {availableQuickStoryContent.map((story) => (
+                  <Box
+                    key={story.id}
+                    onClick={() => handleStorySelectionForImport(story.id)}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      p: 2,
+                      mb: 1,
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      backgroundColor: selectedStoryIdsForImport.includes(
+                        story.id
+                      )
+                        ? "rgba(59, 130, 246, 0.1)"
+                        : "white",
+                      borderColor: selectedStoryIdsForImport.includes(story.id)
+                        ? "rgb(59, 130, 246)"
+                        : "#e5e7eb",
+                      "&:hover": {
+                        backgroundColor: selectedStoryIdsForImport.includes(
+                          story.id
+                        )
+                          ? "rgba(59, 130, 246, 0.15)"
+                          : "#f9fafb",
+                      },
+                      "&:last-child": {
+                        mb: 0,
+                      },
+                    }}
+                  >
+                    <Checkbox
+                      checked={selectedStoryIdsForImport.includes(story.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleStorySelectionForImport(story.id);
+                      }}
+                      sx={{
+                        mr: 2,
+                        color: "rgb(59, 130, 246)",
+                        "&.Mui-checked": {
+                          color: "rgb(59, 130, 246)",
+                        },
+                      }}
+                    />
+                    <AutoStoriesIcon
+                      sx={{
+                        fontSize: 24,
+                        color: "rgb(107, 114, 128)",
+                        mr: 2,
+                      }}
+                    />
+                    <Box sx={{ flex: 1 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: "'Rubik', sans-serif",
+                          fontWeight: 500,
+                          fontSize: "14px",
+                          color: "#1f2937",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {story.title}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: "'Rubik', sans-serif",
+                          fontWeight: 400,
+                          fontSize: "12px",
+                          color: "rgb(107, 114, 128)",
+                          lineHeight: 1.4,
+                          mt: 0.5,
+                        }}
+                      >
+                        {getItemWordCount(story.content)} words
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+
+              {/* Action buttons */}
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 2,
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
+              >
+                <Button
+                  onClick={handleImportStoryModalClose}
+                  variant="outlined"
+                  sx={{
+                    flex: 1,
+                    boxShadow: "none",
+                    "&:hover": {
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleImportStory}
+                  variant="contained"
+                  disabled={selectedStoryIdsForImport.length === 0}
+                  sx={{
+                    flex: 1,
+                    backgroundColor: "rgb(19, 135, 194)",
+                    textTransform: "none",
+                    fontFamily: "'Rubik', sans-serif",
+                    py: 1.5,
+                    boxShadow: "none",
+                    "&:hover": {
+                      backgroundColor: "rgb(15, 108, 155)",
+                      boxShadow: "none",
+                    },
+                    "&:disabled": {
+                      backgroundColor: "rgb(156, 163, 175)",
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  <Box sx={{ display: { xs: "block", sm: "none" } }}>
+                    Import
+                  </Box>
+                  <Box sx={{ display: { xs: "none", sm: "block" } }}>
+                    Import{" "}
+                    {selectedStoryIdsForImport.length > 0
+                      ? `${selectedStoryIdsForImport.length} `
+                      : ""}
+                    Stories as Chapters
+                  </Box>
+                </Button>
+              </Box>
+            </Box>
+          </Box>
+        </Modal>
+
         {/* Create Story Modal */}
         <Modal
           open={createStoryModalOpen}
@@ -5891,7 +6695,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                 fullWidth
                 sx={{ mb: 4, maxWidth: { xs: "100%", sm: "none" } }}
               >
-                <InputLabel>Select Stories</InputLabel>
+                <InputLabel>Select QuickStories</InputLabel>
                 <Select
                   multiple
                   value={selectedStoryIds}
@@ -5902,14 +6706,14 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                     );
                   }}
                   renderValue={(selected) =>
-                    stories
+                    availableQuickStoryContent
                       .filter((story) => selected.includes(story.id))
                       .map((story) => story.title)
                       .join(", ")
                   }
-                  label="Select Stories"
+                  label="Select QuickStories"
                 >
-                  {stories
+                  {availableQuickStoryContent
                     .filter(
                       (story) =>
                         !parts.some(
@@ -6666,127 +7470,203 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                 }}
               />
 
-              {/* Ideas Selection */}
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Select Ideas</InputLabel>
-                <Select
-                  multiple
-                  value={selectedIdeaIds}
-                  onChange={(e) =>
-                    setSelectedIdeaIds(
-                      typeof e.target.value === "string"
-                        ? e.target.value.split(",")
-                        : e.target.value
-                    )
-                  }
-                  renderValue={(selected) => (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {selected.map((value) => {
-                        const idea = ideas.find((i) => i.id === value);
-                        return idea ? (
-                          <Box
-                            key={value}
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 0.5,
-                              backgroundColor: "rgba(59, 130, 246, 0.1)",
-                              borderRadius: 1,
-                              px: 1,
-                              py: 0.5,
-                            }}
-                          >
-                            <BatchPredictionIcon
-                              sx={{ fontSize: 12, color: "rgb(59, 130, 246)" }}
-                            />
-                            <Typography
-                              variant="body2"
+              {/* Ideas Selection - Hidden in Story Writer mode */}
+              {!isQuickStoryMode && (
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>Select Ideas</InputLabel>
+                  <Select
+                    multiple
+                    value={selectedIdeaIds}
+                    onChange={(e) =>
+                      setSelectedIdeaIds(
+                        typeof e.target.value === "string"
+                          ? e.target.value.split(",")
+                          : e.target.value
+                      )
+                    }
+                    renderValue={(selected) => (
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {selected.map((value) => {
+                          const idea = ideas.find((i) => i.id === value);
+                          return idea ? (
+                            <Box
+                              key={value}
                               sx={{
-                                fontSize: "12px",
-                                color: "rgb(59, 130, 246)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                                backgroundColor: "rgba(59, 130, 246, 0.1)",
+                                borderRadius: 1,
+                                px: 1,
+                                py: 0.5,
                               }}
                             >
-                              {idea.title}
-                            </Typography>
-                          </Box>
-                        ) : null;
-                      })}
-                    </Box>
-                  )}
-                >
-                  {ideas.map((idea) => (
-                    <MenuItem key={idea.id} value={idea.id}>
-                      <Checkbox
-                        checked={selectedIdeaIds.indexOf(idea.id) > -1}
-                      />
-                      <ListItemText primary={idea.title} />
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                              <BatchPredictionIcon
+                                sx={{
+                                  fontSize: 12,
+                                  color: "rgb(59, 130, 246)",
+                                }}
+                              />
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontSize: "12px",
+                                  color: "rgb(59, 130, 246)",
+                                }}
+                              >
+                                {idea.title}
+                              </Typography>
+                            </Box>
+                          ) : null;
+                        })}
+                      </Box>
+                    )}
+                  >
+                    {ideas.map((idea) => (
+                      <MenuItem key={idea.id} value={idea.id}>
+                        <Checkbox
+                          checked={selectedIdeaIds.indexOf(idea.id) > -1}
+                        />
+                        <ListItemText primary={idea.title} />
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
 
-              {/* Characters Selection */}
-              <FormControl fullWidth sx={{ mb: 3 }}>
-                <InputLabel>Select Characters</InputLabel>
-                <Select
-                  multiple
-                  value={selectedCharacterIds}
-                  onChange={(e) =>
-                    setSelectedCharacterIds(
-                      typeof e.target.value === "string"
-                        ? e.target.value.split(",")
-                        : e.target.value
-                    )
-                  }
-                  renderValue={(selected) => (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {selected.map((value) => {
-                        const character = characters.find(
-                          (c) => c.id === value
-                        );
-                        return character ? (
-                          <Box
-                            key={value}
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 0.5,
-                              backgroundColor: "rgba(236, 72, 153, 0.1)",
-                              borderRadius: 1,
-                              px: 1,
-                              py: 0.5,
-                            }}
-                          >
-                            <FaceOutlinedIcon
-                              sx={{ fontSize: 12, color: "rgb(236, 72, 153)" }}
-                            />
-                            <Typography
-                              variant="body2"
+              {/* Characters Selection - Hidden in Story Writer mode */}
+              {!isQuickStoryMode && (
+                <FormControl fullWidth sx={{ mb: 3 }}>
+                  <InputLabel>Select Characters</InputLabel>
+                  <Select
+                    multiple
+                    value={selectedCharacterIds}
+                    onChange={(e) =>
+                      setSelectedCharacterIds(
+                        typeof e.target.value === "string"
+                          ? e.target.value.split(",")
+                          : e.target.value
+                      )
+                    }
+                    renderValue={(selected) => (
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {selected.map((value) => {
+                          const character = characters.find(
+                            (c) => c.id === value
+                          );
+                          return character ? (
+                            <Box
+                              key={value}
                               sx={{
-                                fontSize: "12px",
-                                color: "rgb(236, 72, 153)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                                backgroundColor: "rgba(236, 72, 153, 0.1)",
+                                borderRadius: 1,
+                                px: 1,
+                                py: 0.5,
                               }}
                             >
-                              {character.name}
-                            </Typography>
-                          </Box>
-                        ) : null;
-                      })}
-                    </Box>
-                  )}
-                >
-                  {characters.map((character) => (
-                    <MenuItem key={character.id} value={character.id}>
-                      <Checkbox
-                        checked={
-                          selectedCharacterIds.indexOf(character.id) > -1
-                        }
-                      />
-                      <ListItemText primary={character.name} />
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                              <FaceOutlinedIcon
+                                sx={{
+                                  fontSize: 12,
+                                  color: "rgb(236, 72, 153)",
+                                }}
+                              />
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontSize: "12px",
+                                  color: "rgb(236, 72, 153)",
+                                }}
+                              >
+                                {character.name}
+                              </Typography>
+                            </Box>
+                          ) : null;
+                        })}
+                      </Box>
+                    )}
+                  >
+                    {characters.map((character) => (
+                      <MenuItem key={character.id} value={character.id}>
+                        <Checkbox
+                          checked={
+                            selectedCharacterIds.indexOf(character.id) > -1
+                          }
+                        />
+                        <ListItemText primary={character.name} />
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+
+              {/* Chapters Selection - Hidden in Story Writer mode */}
+              {!isQuickStoryMode && (
+                <FormControl fullWidth sx={{ mb: 3 }}>
+                  <InputLabel>Select Chapters</InputLabel>
+                  <Select
+                    multiple
+                    value={selectedNoteCardChapterIds}
+                    onChange={(e) =>
+                      setSelectedNoteCardChapterIds(
+                        typeof e.target.value === "string"
+                          ? e.target.value.split(",")
+                          : e.target.value
+                      )
+                    }
+                    renderValue={(selected) => (
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {selected.map((value) => {
+                          const chapter = chapters.find((c) => c.id === value);
+                          return chapter ? (
+                            <Box
+                              key={value}
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                                backgroundColor: "rgba(147, 51, 234, 0.1)",
+                                borderRadius: 1,
+                                px: 1,
+                                py: 0.5,
+                              }}
+                            >
+                              <MenuBookOutlinedIcon
+                                sx={{
+                                  fontSize: 12,
+                                  color: "rgb(147, 51, 234)",
+                                }}
+                              />
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontSize: "12px",
+                                  color: "rgb(147, 51, 234)",
+                                }}
+                              >
+                                {chapter.title}
+                              </Typography>
+                            </Box>
+                          ) : null;
+                        })}
+                      </Box>
+                    )}
+                  >
+                    {chapters.map((chapter) => (
+                      <MenuItem key={chapter.id} value={chapter.id}>
+                        <Checkbox
+                          checked={
+                            selectedNoteCardChapterIds.indexOf(chapter.id) > -1
+                          }
+                        />
+                        <ListItemText primary={chapter.title} />
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
 
               <Box
                 sx={{
@@ -6830,6 +7710,205 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                   }}
                 >
                   {editingNoteCard ? "Update Note Card" : "Create Note Card"}
+                </Button>
+              </Box>
+            </Box>
+          </Box>
+        </Modal>
+
+        {/* Overwrite Confirmation Modal */}
+        <Modal
+          open={overwriteConfirmModalOpen}
+          onClose={handleOverwriteConfirmClose}
+          aria-labelledby="overwrite-confirm-modal-title"
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              top: { xs: 0, sm: "50%" },
+              left: { xs: 0, sm: "50%" },
+              transform: { xs: "none", sm: "translate(-50%, -50%)" },
+              width: { xs: "100%", sm: 500 },
+              height: { xs: "100vh", sm: "auto" },
+              bgcolor: "background.paper",
+              borderRadius: { xs: 0, sm: 3 },
+              overflow: "hidden",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+            }}
+          >
+            {/* Header */}
+            <Box
+              sx={{
+                backgroundColor: "rgb(239, 68, 68)",
+                color: "white",
+                p: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Typography
+                id="overwrite-confirm-modal-title"
+                variant="h6"
+                component="h2"
+                sx={{
+                  fontFamily: "'Rubik', sans-serif",
+                  fontWeight: 600,
+                  margin: 0,
+                }}
+              >
+                Chapter Name Conflict
+              </Typography>
+              <IconButton
+                onClick={handleOverwriteConfirmClose}
+                sx={{
+                  color: "white",
+                  "&:hover": {
+                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  },
+                }}
+              >
+                <CloseIcon />
+              </IconButton>
+            </Box>
+
+            {/* Modal content */}
+            <Box
+              sx={{
+                p: 4,
+                display: "flex",
+                flexDirection: "column",
+                minHeight: { xs: "calc(100vh - 80px)", sm: "auto" },
+              }}
+            >
+              <Typography
+                variant="body1"
+                sx={{
+                  fontFamily: "'Rubik', sans-serif",
+                  fontSize: "16px",
+                  color: "#374151",
+                  mb: 3,
+                  lineHeight: 1.6,
+                }}
+              >
+                The following stories have the same names as existing chapters:
+              </Typography>
+
+              {/* Conflicting chapters list */}
+              <Box sx={{ mb: 3, maxHeight: "200px", overflowY: "auto" }}>
+                {conflictingChapters.map((conflict, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      p: 2,
+                      mb: 1,
+                      border: "1px solid #fca5a5",
+                      borderRadius: "6px",
+                      backgroundColor: "#fef2f2",
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontFamily: "'Rubik', sans-serif",
+                        fontWeight: 500,
+                        fontSize: "14px",
+                        color: "#dc2626",
+                      }}
+                    >
+                      &ldquo;{conflict.story.title}&rdquo;
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontFamily: "'Rubik', sans-serif",
+                        fontSize: "12px",
+                        color: "#6b7280",
+                        mt: 0.5,
+                      }}
+                    >
+                      Will overwrite existing chapter with{" "}
+                      {getItemWordCount(conflict.existingChapter.content)} words
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+
+              <Typography
+                variant="body2"
+                sx={{
+                  fontFamily: "'Rubik', sans-serif",
+                  fontSize: "14px",
+                  color: "#6b7280",
+                  mb: 4,
+                  textAlign: "center",
+                }}
+              >
+                What would you like to do?
+              </Typography>
+
+              {/* Action buttons */}
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: { xs: "column", sm: "row" },
+                  gap: 2,
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
+              >
+                <Button
+                  onClick={handleOverwriteConfirmClose}
+                  variant="outlined"
+                  sx={{
+                    flex: { xs: "none", sm: 1 },
+                    boxShadow: "none",
+                    "&:hover": {
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  Cancel
+                </Button>
+
+                {pendingImportStories.length > 0 && (
+                  <Button
+                    onClick={handleSkipConflicts}
+                    variant="contained"
+                    sx={{
+                      flex: { xs: "none", sm: 1 },
+                      backgroundColor: "rgb(107, 114, 128)",
+                      textTransform: "none",
+                      fontFamily: "'Rubik', sans-serif",
+                      py: 1.5,
+                      boxShadow: "none",
+                      "&:hover": {
+                        backgroundColor: "rgb(75, 85, 99)",
+                        boxShadow: "none",
+                      },
+                    }}
+                  >
+                    Skip Conflicts
+                  </Button>
+                )}
+
+                <Button
+                  onClick={handleConfirmOverwrite}
+                  variant="contained"
+                  sx={{
+                    flex: { xs: "none", sm: 1 },
+                    backgroundColor: "rgb(239, 68, 68)",
+                    textTransform: "none",
+                    fontFamily: "'Rubik', sans-serif",
+                    py: 1.5,
+                    boxShadow: "none",
+                    "&:hover": {
+                      backgroundColor: "rgb(220, 38, 38)",
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  Overwrite Chapters
                 </Button>
               </Box>
             </Box>
