@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
@@ -3881,7 +3879,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
         </div>
 
         {/* Dashboard Container */}
-        <div className="flex-1 relative p-4">
+        <div className="flex-1 relative p-4 bg-white">
           <div
             className={`h-full flex flex-col ${
               isEditingChapter || isEditingStory || isEditingOutline
