@@ -7747,7 +7747,7 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                     },
                   }}
                 >
-                  {editingNoteCard ? "Update Note Card" : "Create Note Card"}
+                  {editingNoteCard ? "Update Card" : "Create Note Card"}
                 </Button>
               </Box>
             </Box>

@@ -34,7 +34,6 @@ import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined
 import AddIcon from "@mui/icons-material/Add";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import FileCopyOutlinedIcon from "@mui/icons-material/FileCopyOutlined";
 import TabletAndroidOutlinedIcon from "@mui/icons-material/TabletAndroidOutlined";
 import Image from "next/image";
@@ -47,6 +46,18 @@ import TwainStoryPricingModal, {
 import TwainProfileMenu from "./TwainProfileMenu";
 import { useUserPreferences } from "../hooks/useUserPreferences";
 import { migrateUserPreferencesEndDate } from "../lib/userPreferences";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  AlignmentType,
+  PageBreak,
+  ImageRun,
+} from "docx";
+import { saveAs } from "file-saver";
+import JSZip from "jszip";
 
 // Type definitions
 interface Contributor {
@@ -439,6 +450,1255 @@ const TwainStoryBuilder: React.FC = () => {
 
   const handleCloseExportModal = () => {
     setShowExportModal(false);
+  };
+
+  // Helper interfaces for Word export
+  interface Chapter {
+    id: string;
+    title: string;
+    content: string; // JSON string of Quill delta
+    createdAt: Date | string;
+  }
+
+  interface Story {
+    id: string;
+    title: string;
+    content: string; // JSON string of Quill delta
+    createdAt: Date | string;
+  }
+
+  interface Part {
+    id: string;
+    title: string;
+    chapterIds: string[];
+    storyIds: string[];
+    createdAt: Date | string;
+  }
+
+  interface DeltaOperation {
+    insert?: string | { image?: string };
+    attributes?: {
+      bold?: boolean;
+      italic?: boolean;
+      underline?: boolean;
+      strike?: boolean;
+      header?: number;
+      align?: string;
+      indent?: number;
+      list?: string;
+      blockquote?: boolean;
+    };
+  }
+
+  interface QuillDelta {
+    ops: DeltaOperation[];
+  }
+
+  // Helper function to convert Quill delta to docx paragraphs
+  const convertQuillDeltaToParagraphs = (delta: QuillDelta): Paragraph[] => {
+    const paragraphs: Paragraph[] = [];
+    let currentParagraphRuns: TextRun[] = [];
+    let currentAttributes: DeltaOperation["attributes"] | undefined = undefined;
+
+    // Handle empty or invalid delta
+    if (!delta || !delta.ops || !Array.isArray(delta.ops)) {
+      return [new Paragraph({ children: [new TextRun("")] })];
+    }
+
+    delta.ops.forEach((op, index) => {
+      if (typeof op.insert === "string") {
+        const lines = op.insert.split("\n");
+
+        lines.forEach((line, lineIndex) => {
+          if (lineIndex > 0 && currentParagraphRuns.length > 0) {
+            // Create paragraph with accumulated runs
+            const alignment =
+              currentAttributes?.align === "center"
+                ? AlignmentType.CENTER
+                : currentAttributes?.align === "right"
+                ? AlignmentType.RIGHT
+                : currentAttributes?.align === "justify"
+                ? AlignmentType.JUSTIFIED
+                : AlignmentType.LEFT;
+
+            const heading = currentAttributes?.header
+              ? currentAttributes.header === 1
+                ? HeadingLevel.HEADING_1
+                : currentAttributes.header === 2
+                ? HeadingLevel.HEADING_2
+                : HeadingLevel.HEADING_3
+              : undefined;
+
+            paragraphs.push(
+              new Paragraph({
+                children: currentParagraphRuns,
+                alignment: alignment,
+                heading: heading,
+                indent: currentAttributes?.indent
+                  ? { left: currentAttributes.indent * 720 }
+                  : undefined,
+              })
+            );
+
+            currentParagraphRuns = [];
+          }
+
+          if (line.length > 0 || lineIndex > 0) {
+            const attributes = op.attributes || {};
+            currentAttributes = attributes;
+
+            currentParagraphRuns.push(
+              new TextRun({
+                text: line,
+                bold: attributes.bold || false,
+                italics: attributes.italic || false,
+                underline: attributes.underline ? {} : undefined,
+                strike: attributes.strike || false,
+              })
+            );
+          }
+        });
+
+        // If this is the last operation, add the final paragraph
+        if (index === delta.ops.length - 1 && currentParagraphRuns.length > 0) {
+          const alignment =
+            currentAttributes?.align === "center"
+              ? AlignmentType.CENTER
+              : currentAttributes?.align === "right"
+              ? AlignmentType.RIGHT
+              : currentAttributes?.align === "justify"
+              ? AlignmentType.JUSTIFIED
+              : AlignmentType.LEFT;
+
+          const heading = currentAttributes?.header
+            ? currentAttributes.header === 1
+              ? HeadingLevel.HEADING_1
+              : currentAttributes.header === 2
+              ? HeadingLevel.HEADING_2
+              : HeadingLevel.HEADING_3
+            : undefined;
+
+          paragraphs.push(
+            new Paragraph({
+              children: currentParagraphRuns,
+              alignment: alignment,
+              heading: heading,
+              indent: currentAttributes?.indent
+                ? { left: currentAttributes.indent * 720 }
+                : undefined,
+            })
+          );
+        }
+      }
+    });
+
+    // If no paragraphs were created, return an empty paragraph
+    if (paragraphs.length === 0) {
+      paragraphs.push(new Paragraph({ children: [new TextRun("")] }));
+    }
+
+    return paragraphs;
+  };
+
+  // Main export to Word function
+  const handleExportToWord = async () => {
+    if (!selectedBook || !session?.user?.email) return;
+
+    try {
+      // Load book data from localStorage
+      const chaptersKey = `twain-book-chapters-${selectedBook.id}-${session.user.email}`;
+      const storiesKey = `twain-book-stories-${selectedBook.id}-${session.user.email}`;
+      const partsKey = `twain-book-parts-${selectedBook.id}-${session.user.email}`;
+
+      const storedChapters = localStorage.getItem(chaptersKey);
+      const storedStories = localStorage.getItem(storiesKey);
+      const storedParts = localStorage.getItem(partsKey);
+
+      const chapters: Chapter[] = storedChapters
+        ? JSON.parse(storedChapters)
+        : [];
+      const stories: Story[] = storedStories ? JSON.parse(storedStories) : [];
+      const parts: Part[] = storedParts ? JSON.parse(storedParts) : [];
+
+      // Load author bio from localStorage
+      const aboutAuthor = localStorage.getItem("aboutAuthor") || "";
+
+      // Create document sections
+      const sections: Paragraph[] = [];
+
+      // Page 1: Title Page
+      sections.push(
+        new Paragraph({
+          children: [new TextRun("")],
+          spacing: { before: 4000 },
+        })
+      );
+
+      // Add cover image if available (as centered paragraph before title)
+      if (selectedBook.coverImage) {
+        try {
+          // Convert base64 to Uint8Array buffer
+          const base64Data = selectedBook.coverImage.replace(
+            /^data:image\/(jpeg|jpg|png|gif);base64,/,
+            ""
+          );
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+
+          sections.push(
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: bytes,
+                  transformation: {
+                    width: 300,
+                    height: 450,
+                  },
+                  type: "png",
+                }),
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 },
+            })
+          );
+        } catch (error) {
+          console.error("Error adding cover image to Word document:", error);
+          // Add a note if image failed to load
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "[Cover Image]",
+                  italics: true,
+                }),
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 },
+            })
+          );
+        }
+      }
+
+      sections.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: selectedBook.title,
+              bold: true,
+              size: 48,
+            }),
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 400 },
+        })
+      );
+
+      if (selectedBook.subtitle) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: selectedBook.subtitle,
+                size: 32,
+              }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 800 },
+          })
+        );
+      }
+
+      sections.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `by ${selectedBook.author}`,
+              size: 28,
+            }),
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 400 },
+        })
+      );
+
+      // Add contributors if available
+      if (selectedBook.contributors && selectedBook.contributors.length > 0) {
+        selectedBook.contributors.forEach((contributor) => {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `${contributor.role}: ${contributor.firstName} ${contributor.lastName}`,
+                  size: 24,
+                }),
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 200 },
+            })
+          );
+        });
+      }
+
+      // Add publisher if available
+      if (selectedBook.publisherName) {
+        sections.push(
+          new Paragraph({
+            children: [new TextRun("")],
+            spacing: { before: 800 },
+          })
+        );
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: selectedBook.publisherName,
+                size: 24,
+              }),
+            ],
+            alignment: AlignmentType.CENTER,
+          })
+        );
+      }
+
+      // Page 2: Copyright Page
+      sections.push(
+        new Paragraph({
+          children: [new PageBreak()],
+        })
+      );
+
+      sections.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `Copyright © ${selectedBook.copyrightYear} by ${selectedBook.author}`,
+              size: 22,
+            }),
+          ],
+          spacing: { after: 400 },
+        })
+      );
+
+      sections.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `${selectedBook.edition}`,
+              size: 22,
+            }),
+          ],
+          spacing: { after: 400 },
+        })
+      );
+
+      // Add copyright clauses
+      if (selectedBook.clauseAllRightsReserved) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "All rights reserved. No part of this publication may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the publisher, except in the case of brief quotations embodied in critical reviews and certain other noncommercial uses permitted by copyright law.",
+                size: 20,
+              }),
+            ],
+            spacing: { after: 400 },
+          })
+        );
+      }
+
+      if (selectedBook.clauseFiction) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "This is a work of fiction. Names, characters, businesses, places, events, locales, and incidents are either the products of the author's imagination or used in a fictitious manner. Any resemblance to actual persons, living or dead, or actual events is purely coincidental.",
+                size: 20,
+              }),
+            ],
+            spacing: { after: 400 },
+          })
+        );
+      }
+
+      if (selectedBook.clauseMoralRights) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `The author asserts the moral right to be identified as the author of this work.`,
+                size: 20,
+              }),
+            ],
+            spacing: { after: 400 },
+          })
+        );
+      }
+
+      if (selectedBook.clauseCustom && selectedBook.customClauseText) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: selectedBook.customClauseText,
+                size: 20,
+              }),
+            ],
+            spacing: { after: 400 },
+          })
+        );
+      }
+
+      // Add ISBNs if available
+      const isbns = [];
+      if (selectedBook.isbnPaperback)
+        isbns.push(`ISBN (Paperback): ${selectedBook.isbnPaperback}`);
+      if (selectedBook.isbnHardcover)
+        isbns.push(`ISBN (Hardcover): ${selectedBook.isbnHardcover}`);
+      if (selectedBook.isbnEpub)
+        isbns.push(`ISBN (ePub): ${selectedBook.isbnEpub}`);
+      if (selectedBook.isbnKindle)
+        isbns.push(`ISBN (Kindle): ${selectedBook.isbnKindle}`);
+      if (selectedBook.isbnPdf)
+        isbns.push(`ISBN (PDF): ${selectedBook.isbnPdf}`);
+
+      if (isbns.length > 0) {
+        sections.push(
+          new Paragraph({
+            children: [new TextRun("")],
+            spacing: { before: 400 },
+          })
+        );
+        isbns.forEach((isbn) => {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: isbn,
+                  size: 20,
+                }),
+              ],
+              spacing: { after: 200 },
+            })
+          );
+        });
+      }
+
+      // Page 3: Dedication (if available)
+      if (selectedBook.description && selectedBook.description.trim()) {
+        sections.push(
+          new Paragraph({
+            children: [new PageBreak()],
+          })
+        );
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: selectedBook.description,
+                size: 24,
+                italics: true,
+              }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 2000 },
+          })
+        );
+      }
+
+      // Page 4+: Story Content
+      sections.push(
+        new Paragraph({
+          children: [new PageBreak()],
+        })
+      );
+
+      // Organize content by parts or chapters
+      if (parts.length > 0) {
+        // If parts are defined, use that order
+        for (const part of parts) {
+          // Add part title
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: part.title,
+                  bold: true,
+                  size: 36,
+                }),
+              ],
+              heading: HeadingLevel.HEADING_1,
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 800, after: 800 },
+            })
+          );
+
+          // Add chapters in this part
+          if (part.chapterIds && part.chapterIds.length > 0) {
+            for (const chapterId of part.chapterIds) {
+              const chapter = chapters.find((ch) => ch.id === chapterId);
+              if (chapter) {
+                sections.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: chapter.title,
+                        bold: true,
+                        size: 32,
+                      }),
+                    ],
+                    heading: HeadingLevel.HEADING_2,
+                    spacing: { before: 600, after: 400 },
+                  })
+                );
+
+                try {
+                  const delta: QuillDelta = JSON.parse(chapter.content || "{}");
+                  const contentParagraphs =
+                    convertQuillDeltaToParagraphs(delta);
+                  sections.push(...contentParagraphs);
+                } catch (error) {
+                  console.error("Error parsing chapter content:", error);
+                  // Add a paragraph indicating the content couldn't be loaded
+                  sections.push(
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: "[Content could not be loaded]",
+                          italics: true,
+                        }),
+                      ],
+                    })
+                  );
+                }
+
+                sections.push(
+                  new Paragraph({
+                    children: [new TextRun("")],
+                    spacing: { after: 400 },
+                  })
+                );
+              }
+            }
+          }
+
+          // Add stories in this part
+          if (part.storyIds && part.storyIds.length > 0) {
+            for (const storyId of part.storyIds) {
+              const story = stories.find((st) => st.id === storyId);
+              if (story) {
+                sections.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: story.title,
+                        bold: true,
+                        size: 32,
+                      }),
+                    ],
+                    heading: HeadingLevel.HEADING_2,
+                    spacing: { before: 600, after: 400 },
+                  })
+                );
+
+                try {
+                  const delta: QuillDelta = JSON.parse(story.content || "{}");
+                  const contentParagraphs =
+                    convertQuillDeltaToParagraphs(delta);
+                  sections.push(...contentParagraphs);
+                } catch (error) {
+                  console.error("Error parsing story content:", error);
+                  // Add a paragraph indicating the content couldn't be loaded
+                  sections.push(
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: "[Content could not be loaded]",
+                          italics: true,
+                        }),
+                      ],
+                    })
+                  );
+                }
+
+                sections.push(
+                  new Paragraph({
+                    children: [new TextRun("")],
+                    spacing: { after: 400 },
+                  })
+                );
+              }
+            }
+          }
+        }
+      } else {
+        // No parts defined, use chapters in order
+        for (const chapter of chapters) {
+          sections.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: chapter.title,
+                  bold: true,
+                  size: 32,
+                }),
+              ],
+              heading: HeadingLevel.HEADING_2,
+              spacing: { before: 600, after: 400 },
+            })
+          );
+
+          try {
+            const delta: QuillDelta = JSON.parse(chapter.content || "{}");
+            const contentParagraphs = convertQuillDeltaToParagraphs(delta);
+            sections.push(...contentParagraphs);
+          } catch (error) {
+            console.error("Error parsing chapter content:", error);
+            // Add a paragraph indicating the content couldn't be loaded
+            sections.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "[Content could not be loaded]",
+                    italics: true,
+                  }),
+                ],
+              })
+            );
+          }
+
+          sections.push(
+            new Paragraph({
+              children: [new TextRun("")],
+              spacing: { after: 400 },
+            })
+          );
+        }
+      }
+
+      // Final Page: About The Author
+      if (aboutAuthor && aboutAuthor.trim()) {
+        sections.push(
+          new Paragraph({
+            children: [new PageBreak()],
+          })
+        );
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "About The Author",
+                bold: true,
+                size: 32,
+              }),
+            ],
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 400, after: 600 },
+          })
+        );
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: aboutAuthor,
+                size: 24,
+              }),
+            ],
+            spacing: { after: 400 },
+          })
+        );
+      }
+
+      // Create the document
+      const doc = new Document({
+        sections: [
+          {
+            properties: {},
+            children: sections,
+          },
+        ],
+      });
+
+      // Generate and download the file
+      const blob = await Packer.toBlob(doc);
+      const fileName = `${selectedBook.title.replace(/[^a-z0-9]/gi, "_")}.docx`;
+      saveAs(blob, fileName);
+
+      handleCloseExportModal();
+    } catch (error) {
+      console.error("Error exporting to Word:", error);
+      alert("An error occurred while exporting the book. Please try again.");
+    }
+  };
+
+  // Helper function to convert Quill delta to HTML for ePub
+  const convertQuillDeltaToHTML = (delta: QuillDelta): string => {
+    if (!delta || !delta.ops || !Array.isArray(delta.ops)) {
+      return "<p></p>";
+    }
+
+    let html = "";
+    let currentParagraph = "";
+    let inList = false;
+    let listType = "";
+
+    delta.ops.forEach((op) => {
+      if (typeof op.insert === "string") {
+        const text = op.insert;
+        const attributes = op.attributes || {};
+
+        // Split by newlines to handle paragraphs
+        const lines = text.split("\n");
+
+        lines.forEach((line, index) => {
+          if (index > 0 && currentParagraph) {
+            // Close previous paragraph or list item
+            if (inList) {
+              html += `<li>${currentParagraph}</li>`;
+            } else if (attributes.header) {
+              html += `<h${attributes.header}>${currentParagraph}</h${attributes.header}>`;
+            } else if (attributes.blockquote) {
+              html += `<blockquote>${currentParagraph}</blockquote>`;
+            } else {
+              const align = attributes.align
+                ? ` style="text-align: ${attributes.align};"`
+                : "";
+              html += `<p${align}>${currentParagraph}</p>`;
+            }
+            currentParagraph = "";
+          }
+
+          if (line.length > 0) {
+            let formattedText = line;
+
+            // Apply text formatting
+            if (attributes.bold)
+              formattedText = `<strong>${formattedText}</strong>`;
+            if (attributes.italic) formattedText = `<em>${formattedText}</em>`;
+            if (attributes.underline) formattedText = `<u>${formattedText}</u>`;
+            if (attributes.strike) formattedText = `<s>${formattedText}</s>`;
+
+            currentParagraph += formattedText;
+          }
+
+          // Handle lists
+          if (attributes.list && !inList) {
+            listType = attributes.list;
+            inList = true;
+            html += listType === "ordered" ? "<ol>" : "<ul>";
+          } else if (!attributes.list && inList) {
+            html += listType === "ordered" ? "</ol>" : "</ul>";
+            inList = false;
+            listType = "";
+          }
+        });
+      }
+    });
+
+    // Close any remaining open paragraph
+    if (currentParagraph) {
+      if (inList) {
+        html += `<li>${currentParagraph}</li>`;
+      } else {
+        html += `<p>${currentParagraph}</p>`;
+      }
+    }
+
+    // Close any remaining open list
+    if (inList) {
+      html += listType === "ordered" ? "</ol>" : "</ul>";
+    }
+
+    return html || "<p></p>";
+  };
+
+  // Main export to ePub function
+  const handleExportToEpub = async () => {
+    if (!selectedBook || !session?.user?.email) return;
+
+    try {
+      const zip = new JSZip();
+
+      // Load book data from localStorage
+      const chaptersKey = `twain-book-chapters-${selectedBook.id}-${session.user.email}`;
+      const storiesKey = `twain-book-stories-${selectedBook.id}-${session.user.email}`;
+      const partsKey = `twain-book-parts-${selectedBook.id}-${session.user.email}`;
+
+      const storedChapters = localStorage.getItem(chaptersKey);
+      const storedStories = localStorage.getItem(storiesKey);
+      const storedParts = localStorage.getItem(partsKey);
+
+      const chapters: Chapter[] = storedChapters
+        ? JSON.parse(storedChapters)
+        : [];
+      const stories: Story[] = storedStories ? JSON.parse(storedStories) : [];
+      const parts: Part[] = storedParts ? JSON.parse(storedParts) : [];
+
+      // Load author bio from localStorage
+      const aboutAuthor = localStorage.getItem("aboutAuthor") || "";
+
+      // Create mimetype file (must be first and uncompressed)
+      zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+
+      // Create META-INF directory
+      const metaInf = zip.folder("META-INF");
+      if (metaInf) {
+        metaInf.file(
+          "container.xml",
+          `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+        );
+      }
+
+      // Create OEBPS directory
+      const oebps = zip.folder("OEBPS");
+      if (!oebps) return;
+
+      // Generate unique ID for the book
+      const bookId = `urn:uuid:${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
+      // Create content.opf (package document)
+      let manifestItems = `
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>
+    <item id="copyright" href="copyright.xhtml" media-type="application/xhtml+xml"/>`;
+
+      // Add cover image to manifest if available
+      if (selectedBook.coverImage) {
+        // Determine image type from base64 data
+        const imageType =
+          selectedBook.coverImage.match(
+            /data:image\/(jpeg|jpg|png|gif);base64,/
+          )?.[1] || "jpeg";
+        const mediaType = `image/${imageType}`;
+        manifestItems += `
+    <item id="cover-image" href="cover.${imageType}" media-type="${mediaType}" properties="cover-image"/>`;
+      }
+
+      let spineItems = `
+    <itemref idref="titlepage"/>
+    <itemref idref="copyright"/>`;
+
+      let navPoints = `
+    <navPoint id="navpoint-1" playOrder="1">
+      <navLabel><text>Title Page</text></navLabel>
+      <content src="titlepage.xhtml"/>
+    </navPoint>
+    <navPoint id="navpoint-2" playOrder="2">
+      <navLabel><text>Copyright</text></navLabel>
+      <content src="copyright.xhtml"/>
+    </navPoint>`;
+
+      let navList = `
+      <li><a href="titlepage.xhtml">Title Page</a></li>
+      <li><a href="copyright.xhtml">Copyright</a></li>`;
+
+      let playOrder = 3;
+
+      // Add dedication if available
+      if (selectedBook.description && selectedBook.description.trim()) {
+        manifestItems += `
+    <item id="dedication" href="dedication.xhtml" media-type="application/xhtml+xml"/>`;
+        spineItems += `
+    <itemref idref="dedication"/>`;
+        navPoints += `
+    <navPoint id="navpoint-${playOrder}" playOrder="${playOrder}">
+      <navLabel><text>Dedication</text></navLabel>
+      <content src="dedication.xhtml"/>
+    </navPoint>`;
+        navList += `
+      <li><a href="dedication.xhtml">Dedication</a></li>`;
+        playOrder++;
+      }
+
+      // Generate chapter/story files based on parts or chapters
+      const contentFiles: { id: string; filename: string; title: string }[] =
+        [];
+
+      if (parts.length > 0) {
+        // If parts are defined, use that order
+        parts.forEach((part) => {
+          // Add chapters in this part
+          if (part.chapterIds && part.chapterIds.length > 0) {
+            part.chapterIds.forEach((chapterId) => {
+              const chapter = chapters.find((ch) => ch.id === chapterId);
+              if (chapter) {
+                const fileId = `chapter-${chapterId}`;
+                const filename = `${fileId}.xhtml`;
+                contentFiles.push({
+                  id: fileId,
+                  filename: filename,
+                  title: chapter.title,
+                });
+              }
+            });
+          }
+
+          // Add stories in this part
+          if (part.storyIds && part.storyIds.length > 0) {
+            part.storyIds.forEach((storyId) => {
+              const story = stories.find((st) => st.id === storyId);
+              if (story) {
+                const fileId = `story-${storyId}`;
+                const filename = `${fileId}.xhtml`;
+                contentFiles.push({
+                  id: fileId,
+                  filename: filename,
+                  title: story.title,
+                });
+              }
+            });
+          }
+        });
+      } else {
+        // No parts defined, use chapters in order
+        chapters.forEach((chapter) => {
+          const fileId = `chapter-${chapter.id}`;
+          const filename = `${fileId}.xhtml`;
+          contentFiles.push({
+            id: fileId,
+            filename: filename,
+            title: chapter.title,
+          });
+        });
+      }
+
+      // Add manifest items and spine for content files
+      contentFiles.forEach((file) => {
+        manifestItems += `
+    <item id="${file.id}" href="${file.filename}" media-type="application/xhtml+xml"/>`;
+        spineItems += `
+    <itemref idref="${file.id}"/>`;
+        navPoints += `
+    <navPoint id="navpoint-${playOrder}" playOrder="${playOrder}">
+      <navLabel><text>${file.title}</text></navLabel>
+      <content src="${file.filename}"/>
+    </navPoint>`;
+        navList += `
+      <li><a href="${file.filename}">${file.title}</a></li>`;
+        playOrder++;
+      });
+
+      // Add about the author if available
+      if (aboutAuthor && aboutAuthor.trim()) {
+        manifestItems += `
+    <item id="about" href="about.xhtml" media-type="application/xhtml+xml"/>`;
+        spineItems += `
+    <itemref idref="about"/>`;
+        navPoints += `
+    <navPoint id="navpoint-${playOrder}" playOrder="${playOrder}">
+      <navLabel><text>About The Author</text></navLabel>
+      <content src="about.xhtml"/>
+    </navPoint>`;
+        navList += `
+      <li><a href="about.xhtml">About The Author</a></li>`;
+      }
+
+      // Create content.opf
+      const contentOpf = `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:identifier id="bookid">${bookId}</dc:identifier>
+    <dc:title>${selectedBook.title}</dc:title>
+    <dc:creator>${selectedBook.author}</dc:creator>
+    <dc:language>en</dc:language>
+    <dc:date>${new Date().toISOString().split("T")[0]}</dc:date>
+    <meta property="dcterms:modified">${
+      new Date().toISOString().split(".")[0]
+    }Z</meta>
+  </metadata>
+  <manifest>${manifestItems}
+  </manifest>
+  <spine toc="ncx">${spineItems}
+  </spine>
+</package>`;
+
+      oebps.file("content.opf", contentOpf);
+
+      // Create toc.ncx (NCX navigation for EPUB2 compatibility)
+      const tocNcx = `<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="${bookId}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle>
+    <text>${selectedBook.title}</text>
+  </docTitle>
+  <navMap>${navPoints}
+  </navMap>
+</ncx>`;
+
+      oebps.file("toc.ncx", tocNcx);
+
+      // Create nav.xhtml (EPUB3 navigation)
+      const navXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+  <title>Navigation</title>
+</head>
+<body>
+  <nav epub:type="toc">
+    <h1>Table of Contents</h1>
+    <ol>${navList}
+    </ol>
+  </nav>
+</body>
+</html>`;
+
+      oebps.file("nav.xhtml", navXhtml);
+
+      // Create titlepage.xhtml
+      let contributorsHTML = "";
+      if (selectedBook.contributors && selectedBook.contributors.length > 0) {
+        contributorsHTML = selectedBook.contributors
+          .map(
+            (c) =>
+              `<p style="text-align: center; font-size: 0.9em; margin: 5px 0;">${c.role}: ${c.firstName} ${c.lastName}</p>`
+          )
+          .join("\n");
+      }
+
+      // Determine cover image file extension if available
+      const coverImageType = selectedBook.coverImage
+        ? selectedBook.coverImage.match(
+            /data:image\/(jpeg|jpg|png|gif);base64,/
+          )?.[1] || "jpeg"
+        : null;
+
+      const titlepageXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Title Page</title>
+</head>
+<body style="font-family: serif;">
+  <div style="text-align: center; padding-top: 100px;">
+    ${
+      selectedBook.coverImage && coverImageType
+        ? `<img src="cover.${coverImageType}" alt="Book Cover" style="max-width: 400px; max-height: 600px; margin: 0 auto 40px auto; display: block;"/>`
+        : ""
+    }
+    <h1 style="font-size: 2.5em; font-weight: bold; margin-bottom: 20px;">${
+      selectedBook.title
+    }</h1>
+    ${
+      selectedBook.subtitle
+        ? `<h2 style="font-size: 1.5em; margin-bottom: 30px;">${selectedBook.subtitle}</h2>`
+        : ""
+    }
+    <p style="font-size: 1.2em; margin-top: 40px;">by ${selectedBook.author}</p>
+    ${contributorsHTML}
+    ${
+      selectedBook.publisherName
+        ? `<p style="font-size: 1em; margin-top: 50px;">${selectedBook.publisherName}</p>`
+        : ""
+    }
+  </div>
+</body>
+</html>`;
+
+      oebps.file("titlepage.xhtml", titlepageXhtml);
+
+      // Add cover image file if available
+      if (selectedBook.coverImage && coverImageType) {
+        const base64Data = selectedBook.coverImage.replace(
+          /^data:image\/(jpeg|jpg|png|gif);base64,/,
+          ""
+        );
+        oebps.file(`cover.${coverImageType}`, base64Data, { base64: true });
+      }
+
+      // Create copyright.xhtml
+      let clausesHTML = "";
+      if (selectedBook.clauseAllRightsReserved) {
+        clausesHTML += `<p>All rights reserved. No part of this publication may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the publisher, except in the case of brief quotations embodied in critical reviews and certain other noncommercial uses permitted by copyright law.</p>`;
+      }
+      if (selectedBook.clauseFiction) {
+        clausesHTML += `<p>This is a work of fiction. Names, characters, businesses, places, events, locales, and incidents are either the products of the author's imagination or used in a fictitious manner. Any resemblance to actual persons, living or dead, or actual events is purely coincidental.</p>`;
+      }
+      if (selectedBook.clauseMoralRights) {
+        clausesHTML += `<p>The author asserts the moral right to be identified as the author of this work.</p>`;
+      }
+      if (selectedBook.clauseCustom && selectedBook.customClauseText) {
+        clausesHTML += `<p>${selectedBook.customClauseText}</p>`;
+      }
+
+      let isbnsHTML = "";
+      const isbns = [];
+      if (selectedBook.isbnPaperback)
+        isbns.push(`ISBN (Paperback): ${selectedBook.isbnPaperback}`);
+      if (selectedBook.isbnHardcover)
+        isbns.push(`ISBN (Hardcover): ${selectedBook.isbnHardcover}`);
+      if (selectedBook.isbnEpub)
+        isbns.push(`ISBN (ePub): ${selectedBook.isbnEpub}`);
+      if (selectedBook.isbnKindle)
+        isbns.push(`ISBN (Kindle): ${selectedBook.isbnKindle}`);
+      if (selectedBook.isbnPdf)
+        isbns.push(`ISBN (PDF): ${selectedBook.isbnPdf}`);
+      if (isbns.length > 0) {
+        isbnsHTML = `<div style="margin-top: 20px;">${isbns
+          .map((isbn) => `<p>${isbn}</p>`)
+          .join("")}</div>`;
+      }
+
+      const copyrightXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Copyright</title>
+</head>
+<body style="font-family: serif; padding: 20px;">
+  <p>Copyright © ${selectedBook.copyrightYear} by ${selectedBook.author}</p>
+  <p>${selectedBook.edition}</p>
+  ${clausesHTML}
+  ${isbnsHTML}
+</body>
+</html>`;
+
+      oebps.file("copyright.xhtml", copyrightXhtml);
+
+      // Create dedication.xhtml if available
+      if (selectedBook.description && selectedBook.description.trim()) {
+        const dedicationXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Dedication</title>
+</head>
+<body style="font-family: serif; padding: 40px;">
+  <div style="text-align: center; padding-top: 100px;">
+    <p style="font-style: italic; font-size: 1.2em;">${selectedBook.description}</p>
+  </div>
+</body>
+</html>`;
+        oebps.file("dedication.xhtml", dedicationXhtml);
+      }
+
+      // Create content files (chapters/stories)
+      if (parts.length > 0) {
+        // If parts are defined, use that order
+        parts.forEach((part) => {
+          // Add chapters in this part
+          if (part.chapterIds && part.chapterIds.length > 0) {
+            part.chapterIds.forEach((chapterId) => {
+              const chapter = chapters.find((ch) => ch.id === chapterId);
+              if (chapter) {
+                try {
+                  const delta: QuillDelta = JSON.parse(chapter.content || "{}");
+                  const contentHTML = convertQuillDeltaToHTML(delta);
+
+                  const chapterXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>${chapter.title}</title>
+</head>
+<body style="font-family: serif; padding: 20px;">
+  <h2>${chapter.title}</h2>
+  ${contentHTML}
+</body>
+</html>`;
+                  oebps.file(`chapter-${chapterId}.xhtml`, chapterXhtml);
+                } catch (error) {
+                  console.error("Error parsing chapter content:", error);
+                }
+              }
+            });
+          }
+
+          // Add stories in this part
+          if (part.storyIds && part.storyIds.length > 0) {
+            part.storyIds.forEach((storyId) => {
+              const story = stories.find((st) => st.id === storyId);
+              if (story) {
+                try {
+                  const delta: QuillDelta = JSON.parse(story.content || "{}");
+                  const contentHTML = convertQuillDeltaToHTML(delta);
+
+                  const storyXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>${story.title}</title>
+</head>
+<body style="font-family: serif; padding: 20px;">
+  <h2>${story.title}</h2>
+  ${contentHTML}
+</body>
+</html>`;
+                  oebps.file(`story-${storyId}.xhtml`, storyXhtml);
+                } catch (error) {
+                  console.error("Error parsing story content:", error);
+                }
+              }
+            });
+          }
+        });
+      } else {
+        // No parts defined, use chapters in order
+        chapters.forEach((chapter) => {
+          try {
+            const delta: QuillDelta = JSON.parse(chapter.content || "{}");
+            const contentHTML = convertQuillDeltaToHTML(delta);
+
+            const chapterXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>${chapter.title}</title>
+</head>
+<body style="font-family: serif; padding: 20px;">
+  <h2>${chapter.title}</h2>
+  ${contentHTML}
+</body>
+</html>`;
+            oebps.file(`chapter-${chapter.id}.xhtml`, chapterXhtml);
+          } catch (error) {
+            console.error("Error parsing chapter content:", error);
+          }
+        });
+      }
+
+      // Create about.xhtml if available
+      if (aboutAuthor && aboutAuthor.trim()) {
+        const aboutXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>About The Author</title>
+</head>
+<body style="font-family: serif; padding: 20px;">
+  <h2 style="text-align: center;">About The Author</h2>
+  <p>${aboutAuthor}</p>
+</body>
+</html>`;
+        oebps.file("about.xhtml", aboutXhtml);
+      }
+
+      // Generate the ePub file
+      const epubBlob = await zip.generateAsync({ type: "blob" });
+      const fileName = `${selectedBook.title.replace(/[^a-z0-9]/gi, "_")}.epub`;
+      saveAs(epubBlob, fileName);
+
+      handleCloseExportModal();
+    } catch (error) {
+      console.error("Error exporting to ePub:", error);
+      alert("An error occurred while exporting the book. Please try again.");
+    }
   };
 
   const handleOpenDeleteModal = (book: Book, isStory: boolean = false) => {
@@ -2481,73 +3741,6 @@ const TwainStoryBuilder: React.FC = () => {
                     mb: 4,
                   }}
                 >
-                  {/* PDF Export */}
-                  <Box
-                    sx={{
-                      border: "2px solid rgb(229, 231, 235)",
-                      borderRadius: 2,
-                      p: 3,
-                      textAlign: "center",
-                      cursor:
-                        planType === "professional" ? "pointer" : "not-allowed",
-                      opacity: planType === "professional" ? 1 : 0.5,
-                      "&:hover": {
-                        borderColor:
-                          planType === "professional"
-                            ? "rgb(19, 135, 194)"
-                            : "rgb(229, 231, 235)",
-                        backgroundColor:
-                          planType === "professional"
-                            ? "rgba(19, 135, 194, 0.02)"
-                            : "transparent",
-                      },
-                      transition: "all 0.2s ease-in-out",
-                    }}
-                    onClick={() => {
-                      if (planType === "professional") {
-                        console.log("Exporting as PDF");
-                        handleCloseExportModal();
-                      }
-                    }}
-                  >
-                    <PictureAsPdfOutlinedIcon
-                      sx={{
-                        fontSize: 48,
-                        color:
-                          planType === "professional"
-                            ? "rgb(220, 38, 38)"
-                            : "rgb(156, 163, 175)",
-                        mb: 2,
-                      }}
-                    />
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        fontFamily: "'Rubik', sans-serif",
-                        fontWeight: 500,
-                        color:
-                          planType === "professional"
-                            ? "rgb(31, 41, 55)"
-                            : "rgb(156, 163, 175)",
-                      }}
-                    >
-                      Format as PDF
-                    </Typography>
-                    {planType !== "professional" && (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontFamily: "'Rubik', sans-serif",
-                          color: "rgb(156, 163, 175)",
-                          display: "block",
-                          mt: 1,
-                        }}
-                      >
-                        (Professional)
-                      </Typography>
-                    )}
-                  </Box>
-
                   {/* Word Export */}
                   <Box
                     sx={{
@@ -2572,8 +3765,7 @@ const TwainStoryBuilder: React.FC = () => {
                     }}
                     onClick={() => {
                       if (planType === "professional") {
-                        console.log("Exporting as Word");
-                        handleCloseExportModal();
+                        handleExportToWord();
                       }
                     }}
                   >
@@ -2639,8 +3831,7 @@ const TwainStoryBuilder: React.FC = () => {
                     }}
                     onClick={() => {
                       if (planType === "professional") {
-                        console.log("Exporting as ePub");
-                        handleCloseExportModal();
+                        handleExportToEpub();
                       }
                     }}
                   >
