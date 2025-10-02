@@ -2411,7 +2411,7 @@ const TwainStoryBuilder: React.FC = () => {
                               className="rounded-r-sm"
                             />
                             {/* Upload overlay on hover */}
-                            <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-r-sm">
+                            <div className="absolute inset-0 bg-black bg-opacity-20 flex flex-col items-center justify-center opacity-0 hover:opacity-60 transition-opacity duration-200 rounded-r-sm">
                               <CloudUploadOutlinedIcon
                                 sx={{
                                   fontSize: 48,
@@ -4283,10 +4283,10 @@ const TwainStoryBuilder: React.FC = () => {
                       >
                         {/* Hover overlay with icons - covers entire card */}
                         <div
-                          className={`absolute inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center transition-opacity duration-200 rounded-r-md z-10 ${
+                          className={`absolute inset-0 bg-black bg-opacity-20 flex flex-col items-center justify-center transition-opacity duration-200 rounded-r-md z-10 ${
                             isActive
-                              ? "opacity-100"
-                              : "opacity-0 group-hover:opacity-100"
+                              ? "opacity-60"
+                              : "opacity-0 group-hover:opacity-50"
                           }`}
                         >
                           {/* Book info - always show */}
@@ -4628,10 +4628,10 @@ const TwainStoryBuilder: React.FC = () => {
                       >
                         {/* Hover overlay with icons - covers entire card */}
                         <div
-                          className={`absolute inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center transition-opacity duration-200 rounded-r-md z-10 ${
+                          className={`absolute inset-0 bg-black bg-opacity-20 flex flex-col items-center justify-center transition-opacity duration-200 rounded-r-md z-10 ${
                             isActive
-                              ? "opacity-100"
-                              : "opacity-0 group-hover:opacity-100"
+                              ? "opacity-60"
+                              : "opacity-0 group-hover:opacity-50"
                           }`}
                         >
                           {/* Story info */}
