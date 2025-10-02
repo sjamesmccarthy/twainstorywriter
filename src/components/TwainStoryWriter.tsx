@@ -36,6 +36,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import FaceOutlinedIcon from "@mui/icons-material/FaceOutlined";
 import CancelIcon from "@mui/icons-material/Cancel";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import BrowserUpdatedOutlinedIcon from "@mui/icons-material/BrowserUpdatedOutlined";
 import PetsIcon from "@mui/icons-material/Pets";
 import TransgenderIcon from "@mui/icons-material/Transgender";
@@ -2835,6 +2836,18 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
     setSelectedNoteCardForMenu(null);
   };
 
+  const handleNoteCardMenuEdit = () => {
+    if (selectedNoteCardForMenu) {
+      const noteCard = noteCards.find(
+        (nc) => nc.id === selectedNoteCardForMenu
+      );
+      if (noteCard) {
+        handleEditNoteCard(noteCard);
+      }
+    }
+    handleNoteCardMenuClose();
+  };
+
   const handleNoteCardMenuIncludeIdea = () => {
     if (selectedNoteCardForMenu) {
       // Find the note card and set it for editing to include ideas
@@ -5157,12 +5170,10 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                           return (
                             <div
                               key={ideaId}
-                              className="flex items-center justify-between bg-blue-50 rounded px-2 py-1.5 min-h-[28px]"
+                              className="flex items-center justify-between bg-blue-50 hover:bg-blue-100 rounded px-2 py-1.5 min-h-[28px] cursor-pointer transition-colors"
+                              onClick={() => handleEditIdea(idea)}
                             >
-                              <div
-                                className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-blue-100 rounded px-1 -mx-1"
-                                onClick={() => handleEditIdea(idea)}
-                              >
+                              <div className="flex items-center gap-1 flex-1 min-w-0">
                                 <BatchPredictionIcon
                                   sx={{
                                     fontSize: 12,
@@ -5214,12 +5225,10 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                           return (
                             <div
                               key={characterId}
-                              className="flex items-center justify-between bg-pink-50 rounded px-2 py-1.5 min-h-[28px]"
+                              className="flex items-center justify-between bg-pink-50 hover:bg-pink-100 rounded px-2 py-1.5 min-h-[28px] cursor-pointer transition-colors"
+                              onClick={() => handleEditCharacter(character)}
                             >
-                              <div
-                                className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-pink-100 rounded px-1 -mx-1"
-                                onClick={() => handleEditCharacter(character)}
-                              >
+                              <div className="flex items-center gap-1 flex-1 min-w-0">
                                 <FaceOutlinedIcon
                                   sx={{
                                     fontSize: 12,
@@ -5271,12 +5280,10 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                           return (
                             <div
                               key={chapterId}
-                              className="flex items-center justify-between bg-purple-50 rounded px-2 py-1.5 min-h-[28px]"
+                              className="flex items-center justify-between bg-purple-50 hover:bg-purple-100 rounded px-2 py-1.5 min-h-[28px] cursor-pointer transition-colors"
+                              onClick={() => handleEditChapter(chapter)}
                             >
-                              <div
-                                className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-purple-100 rounded px-1 -mx-1"
-                                onClick={() => handleEditChapter(chapter)}
-                              >
+                              <div className="flex items-center gap-1 flex-1 min-w-0">
                                 <MenuBookOutlinedIcon
                                   sx={{
                                     fontSize: 12,
@@ -5338,6 +5345,10 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                   horizontal: "right",
                 }}
               >
+                <MenuItem onClick={handleNoteCardMenuEdit}>
+                  <EditOutlinedIcon sx={{ mr: 1, fontSize: 16 }} />
+                  Edit
+                </MenuItem>
                 {!isQuickStoryMode && (
                   <MenuItem onClick={handleNoteCardMenuIncludeIdea}>
                     <BatchPredictionIcon sx={{ mr: 1, fontSize: 16 }} />
@@ -5356,12 +5367,13 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                     Include Chapter
                   </MenuItem>
                 )}
+
                 <MenuItem
                   onClick={handleNoteCardMenuDelete}
                   sx={{ color: "error.main" }}
                 >
                   <DeleteOutlinedIcon sx={{ mr: 1, fontSize: 16 }} />
-                  Delete Note Card
+                  Delete
                 </MenuItem>
                 {/* Color options */}
                 <div
@@ -7510,202 +7522,218 @@ const TwainStoryWriter: React.FC<TwainStoryWriterProps> = ({
                 }}
               />
 
-              {/* Ideas Selection - Hidden in Story Writer mode */}
+              {/* Ideas, Characters, Chapters Selection - Hidden in Story Writer mode */}
               {!isQuickStoryMode && (
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel>Select Ideas</InputLabel>
-                  <Select
-                    multiple
-                    value={selectedIdeaIds}
-                    onChange={(e) =>
-                      setSelectedIdeaIds(
-                        typeof e.target.value === "string"
-                          ? e.target.value.split(",")
-                          : e.target.value
-                      )
-                    }
-                    renderValue={(selected) => (
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                        {selected.map((value) => {
-                          const idea = ideas.find((i) => i.id === value);
-                          return idea ? (
-                            <Box
-                              key={value}
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 0.5,
-                                backgroundColor: "rgba(59, 130, 246, 0.1)",
-                                borderRadius: 1,
-                                px: 1,
-                                py: 0.5,
-                              }}
-                            >
-                              <BatchPredictionIcon
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: { xs: "column", md: "row" },
+                    gap: 2,
+                    width: "100%",
+                    mb: 3,
+                  }}
+                >
+                  {/* Ideas Selection */}
+                  <FormControl sx={{ flex: 1 }}>
+                    <InputLabel>Select Ideas</InputLabel>
+                    <Select
+                      multiple
+                      value={selectedIdeaIds}
+                      onChange={(e) =>
+                        setSelectedIdeaIds(
+                          typeof e.target.value === "string"
+                            ? e.target.value.split(",")
+                            : e.target.value
+                        )
+                      }
+                      renderValue={(selected) => (
+                        <Box
+                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
+                        >
+                          {selected.map((value) => {
+                            const idea = ideas.find((i) => i.id === value);
+                            return idea ? (
+                              <Box
+                                key={value}
                                 sx={{
-                                  fontSize: 12,
-                                  color: "rgb(59, 130, 246)",
-                                }}
-                              />
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontSize: "12px",
-                                  color: "rgb(59, 130, 246)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 0.5,
+                                  backgroundColor: "rgba(59, 130, 246, 0.1)",
+                                  borderRadius: 1,
+                                  px: 1,
+                                  py: 0.5,
                                 }}
                               >
-                                {idea.title}
-                              </Typography>
-                            </Box>
-                          ) : null;
-                        })}
-                      </Box>
-                    )}
-                  >
-                    {ideas.map((idea) => (
-                      <MenuItem key={idea.id} value={idea.id}>
-                        <Checkbox
-                          checked={selectedIdeaIds.indexOf(idea.id) > -1}
-                        />
-                        <ListItemText primary={idea.title} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
+                                <BatchPredictionIcon
+                                  sx={{
+                                    fontSize: 12,
+                                    color: "rgb(59, 130, 246)",
+                                  }}
+                                />
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontSize: "12px",
+                                    color: "rgb(59, 130, 246)",
+                                  }}
+                                >
+                                  {idea.title}
+                                </Typography>
+                              </Box>
+                            ) : null;
+                          })}
+                        </Box>
+                      )}
+                    >
+                      {ideas.map((idea) => (
+                        <MenuItem key={idea.id} value={idea.id}>
+                          <Checkbox
+                            checked={selectedIdeaIds.indexOf(idea.id) > -1}
+                          />
+                          <ListItemText primary={idea.title} />
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
-              {/* Characters Selection - Hidden in Story Writer mode */}
-              {!isQuickStoryMode && (
-                <FormControl fullWidth sx={{ mb: 3 }}>
-                  <InputLabel>Select Characters</InputLabel>
-                  <Select
-                    multiple
-                    value={selectedCharacterIds}
-                    onChange={(e) =>
-                      setSelectedCharacterIds(
-                        typeof e.target.value === "string"
-                          ? e.target.value.split(",")
-                          : e.target.value
-                      )
-                    }
-                    renderValue={(selected) => (
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                        {selected.map((value) => {
-                          const character = characters.find(
-                            (c) => c.id === value
-                          );
-                          return character ? (
-                            <Box
-                              key={value}
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 0.5,
-                                backgroundColor: "rgba(236, 72, 153, 0.1)",
-                                borderRadius: 1,
-                                px: 1,
-                                py: 0.5,
-                              }}
-                            >
-                              <FaceOutlinedIcon
+                  {/* Characters Selection */}
+                  <FormControl sx={{ flex: 1 }}>
+                    <InputLabel>Select Characters</InputLabel>
+                    <Select
+                      multiple
+                      value={selectedCharacterIds}
+                      onChange={(e) =>
+                        setSelectedCharacterIds(
+                          typeof e.target.value === "string"
+                            ? e.target.value.split(",")
+                            : e.target.value
+                        )
+                      }
+                      renderValue={(selected) => (
+                        <Box
+                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
+                        >
+                          {selected.map((value) => {
+                            const character = characters.find(
+                              (c) => c.id === value
+                            );
+                            return character ? (
+                              <Box
+                                key={value}
                                 sx={{
-                                  fontSize: 12,
-                                  color: "rgb(236, 72, 153)",
-                                }}
-                              />
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontSize: "12px",
-                                  color: "rgb(236, 72, 153)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 0.5,
+                                  backgroundColor: "rgba(236, 72, 153, 0.1)",
+                                  borderRadius: 1,
+                                  px: 1,
+                                  py: 0.5,
                                 }}
                               >
-                                {character.name}
-                              </Typography>
-                            </Box>
-                          ) : null;
-                        })}
-                      </Box>
-                    )}
-                  >
-                    {characters.map((character) => (
-                      <MenuItem key={character.id} value={character.id}>
-                        <Checkbox
-                          checked={
-                            selectedCharacterIds.indexOf(character.id) > -1
-                          }
-                        />
-                        <ListItemText primary={character.name} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
+                                <FaceOutlinedIcon
+                                  sx={{
+                                    fontSize: 12,
+                                    color: "rgb(236, 72, 153)",
+                                  }}
+                                />
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontSize: "12px",
+                                    color: "rgb(236, 72, 153)",
+                                  }}
+                                >
+                                  {character.name}
+                                </Typography>
+                              </Box>
+                            ) : null;
+                          })}
+                        </Box>
+                      )}
+                    >
+                      {characters.map((character) => (
+                        <MenuItem key={character.id} value={character.id}>
+                          <Checkbox
+                            checked={
+                              selectedCharacterIds.indexOf(character.id) > -1
+                            }
+                          />
+                          <ListItemText primary={character.name} />
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
-              {/* Chapters Selection - Hidden in Story Writer mode */}
-              {!isQuickStoryMode && (
-                <FormControl fullWidth sx={{ mb: 3 }}>
-                  <InputLabel>Select Chapters</InputLabel>
-                  <Select
-                    multiple
-                    value={selectedNoteCardChapterIds}
-                    onChange={(e) =>
-                      setSelectedNoteCardChapterIds(
-                        typeof e.target.value === "string"
-                          ? e.target.value.split(",")
-                          : e.target.value
-                      )
-                    }
-                    renderValue={(selected) => (
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                        {selected.map((value) => {
-                          const chapter = chapters.find((c) => c.id === value);
-                          return chapter ? (
-                            <Box
-                              key={value}
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 0.5,
-                                backgroundColor: "rgba(147, 51, 234, 0.1)",
-                                borderRadius: 1,
-                                px: 1,
-                                py: 0.5,
-                              }}
-                            >
-                              <MenuBookOutlinedIcon
+                  {/* Chapters Selection */}
+                  <FormControl sx={{ flex: 1 }}>
+                    <InputLabel>Select Chapters</InputLabel>
+                    <Select
+                      multiple
+                      value={selectedNoteCardChapterIds}
+                      onChange={(e) =>
+                        setSelectedNoteCardChapterIds(
+                          typeof e.target.value === "string"
+                            ? e.target.value.split(",")
+                            : e.target.value
+                        )
+                      }
+                      renderValue={(selected) => (
+                        <Box
+                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
+                        >
+                          {selected.map((value) => {
+                            const chapter = chapters.find(
+                              (c) => c.id === value
+                            );
+                            return chapter ? (
+                              <Box
+                                key={value}
                                 sx={{
-                                  fontSize: 12,
-                                  color: "rgb(147, 51, 234)",
-                                }}
-                              />
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontSize: "12px",
-                                  color: "rgb(147, 51, 234)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 0.5,
+                                  backgroundColor: "rgba(147, 51, 234, 0.1)",
+                                  borderRadius: 1,
+                                  px: 1,
+                                  py: 0.5,
                                 }}
                               >
-                                {chapter.title}
-                              </Typography>
-                            </Box>
-                          ) : null;
-                        })}
-                      </Box>
-                    )}
-                  >
-                    {chapters.map((chapter) => (
-                      <MenuItem key={chapter.id} value={chapter.id}>
-                        <Checkbox
-                          checked={
-                            selectedNoteCardChapterIds.indexOf(chapter.id) > -1
-                          }
-                        />
-                        <ListItemText primary={chapter.title} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                                <MenuBookOutlinedIcon
+                                  sx={{
+                                    fontSize: 12,
+                                    color: "rgb(147, 51, 234)",
+                                  }}
+                                />
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontSize: "12px",
+                                    color: "rgb(147, 51, 234)",
+                                  }}
+                                >
+                                  {chapter.title}
+                                </Typography>
+                              </Box>
+                            ) : null;
+                          })}
+                        </Box>
+                      )}
+                    >
+                      {chapters.map((chapter) => (
+                        <MenuItem key={chapter.id} value={chapter.id}>
+                          <Checkbox
+                            checked={
+                              selectedNoteCardChapterIds.indexOf(chapter.id) >
+                              -1
+                            }
+                          />
+                          <ListItemText primary={chapter.title} />
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
               )}
 
               <Box
