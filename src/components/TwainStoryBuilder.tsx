@@ -59,6 +59,40 @@ import {
 import { saveAs } from "file-saver";
 import JSZip from "jszip";
 
+// Shared genre options list
+const GENRE_OPTIONS = [
+  "Fantasy",
+  "Science Fiction",
+  "Romance",
+  "Mystery",
+  "Thriller",
+  "Horror",
+  "Historical Fiction",
+  "Contemporary Fiction",
+  "Literary Fiction",
+  "Young Adult",
+  "Children's",
+  "Biography",
+  "Memoir",
+  "Self-Help",
+  "Business",
+  "Health & Fitness",
+  "Travel",
+  "Cooking",
+  "History",
+  "True Crime",
+  "Religion & Spirituality",
+  "Poetry",
+  "Drama",
+  "Comedy",
+  "Adventure",
+  "Western",
+  "Dystopian",
+  "Paranormal",
+  "Urban Fantasy",
+  "Crime",
+];
+
 // Type definitions
 interface Contributor {
   id: string;
@@ -280,6 +314,7 @@ const TwainStoryBuilder: React.FC = () => {
   const [bookTitle, setBookTitle] = useState("");
   const [createStoryModalOpen, setCreateStoryModalOpen] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
+  const [storyGenre, setStoryGenre] = useState("");
   const [currentView, setCurrentView] = useState<
     "bookshelf" | "manage" | "write"
   >("bookshelf");
@@ -339,6 +374,7 @@ const TwainStoryBuilder: React.FC = () => {
     useState<Book | null>(null);
   const [storyOptionsTitle, setStoryOptionsTitle] = useState("");
   const [storyOptionsMoveToBook, setStoryOptionsMoveToBook] = useState("");
+  const [storyOptionsGenre, setStoryOptionsGenre] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use twain5.png for the login screen
@@ -1872,6 +1908,7 @@ const TwainStoryBuilder: React.FC = () => {
   const handleCreateStoryModalClose = () => {
     setCreateStoryModalOpen(false);
     setStoryTitle("");
+    setStoryGenre("");
   };
 
   const handleCreateStory = () => {
@@ -1889,7 +1926,7 @@ const TwainStoryBuilder: React.FC = () => {
         seriesNumber: undefined,
         contributors: undefined,
         description: undefined,
-        genre: undefined,
+        genre: storyGenre.trim() || undefined,
         ageGroup: "Adult",
         publisherName: undefined,
         isbnEpub: undefined,
@@ -2240,6 +2277,7 @@ const TwainStoryBuilder: React.FC = () => {
     setSelectedStoryForOptions(story);
     setStoryOptionsTitle(story.title);
     setStoryOptionsMoveToBook("");
+    setStoryOptionsGenre(story.genre || "");
     setShowStoryOptionsModal(true);
   };
 
@@ -2248,19 +2286,24 @@ const TwainStoryBuilder: React.FC = () => {
     setSelectedStoryForOptions(null);
     setStoryOptionsTitle("");
     setStoryOptionsMoveToBook("");
+    setStoryOptionsGenre("");
   };
 
   const handleUpdateStoryOptions = () => {
     if (!selectedStoryForOptions || !session?.user?.email) return;
 
-    // Update story title if changed
-    if (
+    // Update story title and/or genre if changed
+    const titleChanged =
       storyOptionsTitle.trim() &&
-      storyOptionsTitle !== selectedStoryForOptions.title
-    ) {
+      storyOptionsTitle !== selectedStoryForOptions.title;
+    const genreChanged =
+      storyOptionsGenre !== (selectedStoryForOptions.genre || "");
+
+    if (titleChanged || genreChanged) {
       const updatedStory = {
         ...selectedStoryForOptions,
-        title: storyOptionsTitle.trim(),
+        title: storyOptionsTitle.trim() || selectedStoryForOptions.title,
+        genre: storyOptionsGenre.trim() || undefined,
         updatedAt: new Date().toISOString(),
       };
 
@@ -2905,52 +2948,11 @@ const TwainStoryBuilder: React.FC = () => {
                           label="Genre"
                           onChange={(e) => setManagedBookGenre(e.target.value)}
                         >
-                          <MenuItem value="Fantasy">Fantasy</MenuItem>
-                          <MenuItem value="Science Fiction">
-                            Science Fiction
-                          </MenuItem>
-                          <MenuItem value="Romance">Romance</MenuItem>
-                          <MenuItem value="Mystery">Mystery</MenuItem>
-                          <MenuItem value="Thriller">Thriller</MenuItem>
-                          <MenuItem value="Horror">Horror</MenuItem>
-                          <MenuItem value="Historical Fiction">
-                            Historical Fiction
-                          </MenuItem>
-                          <MenuItem value="Contemporary Fiction">
-                            Contemporary Fiction
-                          </MenuItem>
-                          <MenuItem value="Literary Fiction">
-                            Literary Fiction
-                          </MenuItem>
-                          <MenuItem value="Young Adult">Young Adult</MenuItem>
-                          <MenuItem value="Children's">
-                            Children&apos;s
-                          </MenuItem>
-                          <MenuItem value="Biography">Biography</MenuItem>
-                          <MenuItem value="Memoir">Memoir</MenuItem>
-                          <MenuItem value="Self-Help">Self-Help</MenuItem>
-                          <MenuItem value="Business">Business</MenuItem>
-                          <MenuItem value="Health & Fitness">
-                            Health & Fitness
-                          </MenuItem>
-                          <MenuItem value="Travel">Travel</MenuItem>
-                          <MenuItem value="Cooking">Cooking</MenuItem>
-                          <MenuItem value="History">History</MenuItem>
-                          <MenuItem value="True Crime">True Crime</MenuItem>
-                          <MenuItem value="Religion & Spirituality">
-                            Religion & Spirituality
-                          </MenuItem>
-                          <MenuItem value="Poetry">Poetry</MenuItem>
-                          <MenuItem value="Drama">Drama</MenuItem>
-                          <MenuItem value="Comedy">Comedy</MenuItem>
-                          <MenuItem value="Adventure">Adventure</MenuItem>
-                          <MenuItem value="Western">Western</MenuItem>
-                          <MenuItem value="Dystopian">Dystopian</MenuItem>
-                          <MenuItem value="Paranormal">Paranormal</MenuItem>
-                          <MenuItem value="Urban Fantasy">
-                            Urban Fantasy
-                          </MenuItem>
-                          <MenuItem value="Crime">Crime</MenuItem>
+                          {GENRE_OPTIONS.map((genre) => (
+                            <MenuItem key={genre} value={genre}>
+                              {genre}
+                            </MenuItem>
+                          ))}
                         </Select>
                       </FormControl>
 
@@ -5318,9 +5320,27 @@ const TwainStoryBuilder: React.FC = () => {
                 value={storyTitle}
                 onChange={(e) => setStoryTitle(e.target.value)}
                 variant="outlined"
-                sx={{ mb: 4 }}
+                sx={{ mb: 3 }}
                 autoFocus
               />
+
+              <FormControl fullWidth sx={{ mb: 4 }}>
+                <InputLabel>Genre (Optional)</InputLabel>
+                <Select
+                  value={storyGenre}
+                  label="Genre (Optional)"
+                  onChange={(e) => setStoryGenre(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  {GENRE_OPTIONS.map((genre) => (
+                    <MenuItem key={genre} value={genre}>
+                      {genre}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               <Box
                 sx={{
                   display: "flex",
@@ -5446,6 +5466,24 @@ const TwainStoryBuilder: React.FC = () => {
                 autoFocus
               />
 
+              <FormControl fullWidth sx={{ mb: 3 }}>
+                <InputLabel>Genre (Optional)</InputLabel>
+                <Select
+                  value={storyOptionsGenre}
+                  label="Genre (Optional)"
+                  onChange={(e) => setStoryOptionsGenre(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  {GENRE_OPTIONS.map((genre) => (
+                    <MenuItem key={genre} value={genre}>
+                      {genre}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
               <FormControl fullWidth sx={{ mb: 4 }}>
                 <InputLabel>Move to Book (Optional)</InputLabel>
                 <Select
@@ -5471,6 +5509,19 @@ const TwainStoryBuilder: React.FC = () => {
                   justifyContent: "space-between",
                 }}
               >
+                <Button
+                  onClick={handleCloseStoryOptionsModal}
+                  variant="outlined"
+                  sx={{
+                    flex: 1,
+                    boxShadow: "none",
+                    "&:hover": {
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  Cancel
+                </Button>
                 <Button
                   onClick={handleDeleteStoryFromModal}
                   variant="outlined"
@@ -5749,6 +5800,7 @@ const TwainStoryBuilder: React.FC = () => {
 
 // Export utility functions for use by other components
 export {
+  GENRE_OPTIONS,
   loadBooksFromStorage,
   saveBooksToStorage,
   updateBookWordCount,
