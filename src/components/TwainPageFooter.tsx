@@ -16,10 +16,10 @@ const TwainPageFooter: React.FC<TwainPageFooterProps> = ({
   const getFooterClasses = () => {
     switch (variant) {
       case "bookshelf":
-        return "h-[100px] flex items-center justify-center bg-gray-200";
+        return "h-[100px] pl-3 pr-3 flex items-center justify-center bg-gray-200";
       case "default":
       default:
-        return "bg-white border-t border-gray-200 py-6";
+        return "bg-white border-t border-gray-200 py-6 pl-3 pr-3";
     }
   };
 

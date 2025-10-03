@@ -64,7 +64,7 @@ export const twainPricingPlans: PricingPlans = {
         "Export to Word® as DOCx",
         "Import Word® files",
         "Create Note & Plot Cards",
-        "Publish Book to Word® or PDF",
+        "Publish Book to Word® or ePub",
         "Publish Book to Amazon Kindle (coming soon)",
       ],
       limitations: {

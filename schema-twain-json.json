@@ -1,0 +1,493 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Twain Story Writer LocalStorage Schema",
+  "description": "JSON Schema defining the structure of all localStorage data used by the Twain Story Writer application",
+  "type": "object",
+  "properties": {
+    "userPreferences": {
+      "description": "User-specific preferences and settings",
+      "storageKey": "twain-user-preferences-{userEmail}",
+      "type": "object",
+      "properties": {
+        "plan": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["freelance", "professional"] },
+            "status": {
+              "type": "string",
+              "enum": ["active", "expired", "cancelled"]
+            },
+            "startDate": { "type": "string", "format": "date-time" },
+            "endDate": { "type": "string", "format": "date-time" },
+            "features": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["type", "status"]
+        },
+        "accountCreatedAt": { "type": "string", "format": "date-time" },
+        "lastLoginAt": { "type": "string", "format": "date-time" },
+        "loginCount": { "type": "integer", "minimum": 0 },
+        "theme": { "type": "string", "enum": ["light", "dark", "auto"] },
+        "sidebarCollapsed": { "type": "boolean" },
+        "defaultView": {
+          "type": "string",
+          "enum": ["bookshelf", "write", "manage"]
+        },
+        "autoSave": { "type": "boolean" },
+        "autoSaveInterval": { "type": "integer", "minimum": 1 },
+        "wordCountGoal": { "type": "integer", "minimum": 0 },
+        "preferredFontSize": { "type": "integer", "minimum": 8 },
+        "preferredFontFamily": { "type": "string" },
+        "showNotifications": { "type": "boolean" },
+        "showWordCountNotifications": { "type": "boolean" },
+        "showSaveNotifications": { "type": "boolean" },
+        "defaultExportFormat": {
+          "type": "string",
+          "enum": ["pdf", "docx", "txt", "html"]
+        },
+        "includeMetadataInExport": { "type": "boolean" },
+        "analyticsOptIn": { "type": "boolean" },
+        "shareUsageData": { "type": "boolean" },
+        "betaFeatures": { "type": "array", "items": { "type": "string" } },
+        "experimentalFeatures": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "recentBooks": { "type": "array", "items": { "type": "string" } },
+        "recentStories": { "type": "array", "items": { "type": "string" } },
+        "customSettings": { "type": "object" }
+      },
+      "required": [
+        "plan",
+        "accountCreatedAt",
+        "lastLoginAt",
+        "loginCount",
+        "theme",
+        "autoSave"
+      ]
+    },
+    "books": {
+      "description": "Main books collection for a user",
+      "storageKey": "twain-story-builder-books-{userEmail}",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "title": { "type": "string" },
+          "subtitle": { "type": "string" },
+          "author": { "type": "string" },
+          "genre": { "type": "string" },
+          "description": { "type": "string" },
+          "wordCount": { "type": "integer", "minimum": 0 },
+          "targetWordCount": { "type": "integer", "minimum": 0 },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "coverImage": {
+            "type": "string",
+            "description": "Base64 encoded image data"
+          },
+          "isSeries": { "type": "boolean" },
+          "seriesName": { "type": "string" },
+          "bookNumber": { "type": "integer", "minimum": 1 },
+          "isbnKindle": { "type": "string" },
+          "isbnPaperback": { "type": "string" },
+          "isbnHardcover": { "type": "string" },
+          "isbnPdf": { "type": "string" },
+          "clauseAllRightsReserved": { "type": "boolean" },
+          "clauseFiction": { "type": "boolean" },
+          "clauseMoralRights": { "type": "boolean" },
+          "clauseCustom": { "type": "boolean" },
+          "customClauseText": { "type": "string" },
+          "contributors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "role": { "type": "string" }
+              },
+              "required": ["name", "role"]
+            }
+          }
+        },
+        "required": ["id", "title", "author", "createdAt"]
+      }
+    },
+    "quickStories": {
+      "description": "Quick stories collection for a user",
+      "storageKey": "twain-story-builder-quickstories-{userEmail}",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "title": { "type": "string" },
+          "author": { "type": "string" },
+          "genre": { "type": "string" },
+          "description": { "type": "string" },
+          "wordCount": { "type": "integer", "minimum": 0 },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "title", "author", "createdAt"]
+      }
+    },
+    "bookContent": {
+      "description": "Content data for books and quick stories",
+      "properties": {
+        "ideas": {
+          "description": "Ideas for a specific book",
+          "storageKey": "twain-{book|quickstory}-ideas-{bookId}-{userEmail}",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "notes": { "type": "string" },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "title", "notes", "createdAt"]
+          }
+        },
+        "characters": {
+          "description": "Characters for a specific book",
+          "storageKey": "twain-{book|quickstory}-characters-{bookId}-{userEmail}",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "avatar": {
+                "type": "string",
+                "description": "Base64 encoded image data"
+              },
+              "name": { "type": "string" },
+              "gender": { "type": "string" },
+              "backstory": { "type": "string" },
+              "characterization": { "type": "string" },
+              "voice": { "type": "string" },
+              "appearance": { "type": "string" },
+              "friendsFamily": { "type": "string" },
+              "favorites": { "type": "string" },
+              "misc": { "type": "string" },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "name", "createdAt"]
+          }
+        },
+        "chapters": {
+          "description": "Chapters for a specific book",
+          "storageKey": "twain-{book|quickstory}-chapters-{bookId}-{userEmail}",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "content": {
+                "type": "string",
+                "description": "JSON string of Quill delta format"
+              },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "title", "content", "createdAt"]
+          }
+        },
+        "stories": {
+          "description": "Stories for a specific book (different from chapters)",
+          "storageKey": "twain-{book|quickstory}-stories-{bookId}-{userEmail}",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "content": {
+                "type": "string",
+                "description": "JSON string of Quill delta format"
+              },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "title", "content", "createdAt"]
+          }
+        },
+        "outlines": {
+          "description": "Story outlines for a specific book",
+          "storageKey": "twain-{book|quickstory}-outlines-{bookId}-{userEmail}",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "content": {
+                "type": "string",
+                "description": "JSON string of Quill delta format"
+              },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "title", "content", "createdAt"]
+          }
+        },
+        "parts": {
+          "description": "Book parts for a specific book",
+          "storageKey": "twain-{book|quickstory}-parts-{bookId}-{userEmail}",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "content": {
+                "type": "string",
+                "description": "JSON string of Quill delta format"
+              },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "title", "content", "createdAt"]
+          }
+        },
+        "notecards": {
+          "description": "Note cards for a specific book",
+          "storageKey": "twain-{book|quickstory}-notecards-{bookId}-{userEmail}",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "content": { "type": "string" },
+              "color": {
+                "type": "string",
+                "enum": ["yellow", "blue", "green", "gray"]
+              },
+              "linkedIdeaIds": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "linkedCharacterIds": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "linkedChapterIds": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "title", "content", "color", "createdAt"]
+          }
+        },
+        "recentActivity": {
+          "description": "Recent activity for a specific book",
+          "storageKey": "twain-{book|quickstory}-recent-activity-{bookId}-{userEmail}",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "idea",
+                  "character",
+                  "chapter",
+                  "story",
+                  "outline",
+                  "part",
+                  "notecard"
+                ]
+              },
+              "title": { "type": "string" },
+              "action": {
+                "type": "string",
+                "enum": ["created", "modified", "deleted"]
+              },
+              "timestamp": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "type", "title", "action", "timestamp"]
+          }
+        }
+      }
+    },
+    "sessionData": {
+      "description": "Temporary session data",
+      "properties": {
+        "currentSelectedBook": {
+          "description": "Currently selected book for the story writer",
+          "storageKey": "currentSelectedBook",
+          "type": "object",
+          "properties": {
+            "id": { "type": "integer" },
+            "title": { "type": "string" },
+            "author": { "type": "string" }
+          }
+        },
+        "isQuickStoryMode": {
+          "description": "Flag indicating if user is in quick story mode",
+          "storageKey": "isQuickStoryMode",
+          "type": "string",
+          "enum": ["true", "false"]
+        },
+        "feedbackSubmitted": {
+          "description": "Flag indicating if feedback has been submitted",
+          "storageKey": "feedbackSubmitted",
+          "type": "string",
+          "enum": ["true"]
+        }
+      }
+    },
+    "globalSettings": {
+      "description": "Global application settings",
+      "properties": {
+        "aboutAuthor": {
+          "description": "Global about author text",
+          "storageKey": "aboutAuthor",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "storageKeyPatterns": {
+      "description": "Patterns used for localStorage keys in the application",
+      "userPreferences": "twain-user-preferences-{userEmail}",
+      "books": "twain-story-builder-books-{userEmail}",
+      "quickStories": "twain-story-builder-quickstories-{userEmail}",
+      "bookIdeas": "twain-book-ideas-{bookId}-{userEmail}",
+      "bookCharacters": "twain-book-characters-{bookId}-{userEmail}",
+      "bookChapters": "twain-book-chapters-{bookId}-{userEmail}",
+      "bookStories": "twain-book-stories-{bookId}-{userEmail}",
+      "bookOutlines": "twain-book-outlines-{bookId}-{userEmail}",
+      "bookParts": "twain-book-parts-{bookId}-{userEmail}",
+      "bookNotecards": "twain-book-notecards-{bookId}-{userEmail}",
+      "bookRecentActivity": "twain-book-recent-activity-{bookId}-{userEmail}",
+      "quickStoryIdeas": "twain-quickstory-ideas-{storyId}-{userEmail}",
+      "quickStoryCharacters": "twain-quickstory-characters-{storyId}-{userEmail}",
+      "quickStoryChapters": "twain-quickstory-chapters-{storyId}-{userEmail}",
+      "quickStoryStories": "twain-quickstory-stories-{storyId}-{userEmail}",
+      "quickStoryOutlines": "twain-quickstory-outlines-{storyId}-{userEmail}",
+      "quickStoryParts": "twain-quickstory-parts-{storyId}-{userEmail}",
+      "quickStoryNotecards": "twain-quickstory-notecards-{storyId}-{userEmail}",
+      "quickStoryRecentActivity": "twain-quickstory-recent-activity-{storyId}-{userEmail}",
+      "legacyChapters": "twain-chapters-{bookId}",
+      "legacyStories": "twain-stories-{bookId}",
+      "legacyOutlines": "twain-outlines-{bookId}",
+      "legacyParts": "twain-parts-{bookId}",
+      "currentSelectedBook": "currentSelectedBook",
+      "isQuickStoryMode": "isQuickStoryMode",
+      "feedbackSubmitted": "feedbackSubmitted",
+      "aboutAuthor": "aboutAuthor"
+    },
+    "dataIsolation": {
+      "description": "Data isolation strategy used in the application",
+      "userBased": {
+        "description": "Data is isolated by user email address",
+        "examples": [
+          "twain-user-preferences-user@example.com",
+          "twain-story-builder-books-user@example.com"
+        ]
+      },
+      "bookBased": {
+        "description": "Content data is further isolated by book/story ID",
+        "examples": [
+          "twain-book-chapters-1-user@example.com",
+          "twain-quickstory-stories-5-user@example.com"
+        ]
+      },
+      "global": {
+        "description": "Some data is stored globally without user isolation",
+        "examples": ["aboutAuthor", "currentSelectedBook", "isQuickStoryMode"]
+      }
+    },
+    "contentFormat": {
+      "description": "Format specifications for content data",
+      "quillDelta": {
+        "description": "Rich text content is stored as JSON-stringified Quill Delta format",
+        "example": "{\"ops\":[{\"insert\":\"Hello World\\n\"}]}"
+      },
+      "dates": {
+        "description": "Dates are stored as ISO 8601 strings",
+        "example": "2023-10-03T12:00:00.000Z"
+      },
+      "images": {
+        "description": "Images are stored as base64 encoded strings",
+        "example": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+      }
+    }
+  },
+  "examples": [
+    {
+      "description": "Example localStorage entry for user preferences",
+      "key": "twain-user-preferences-john@example.com",
+      "value": {
+        "plan": {
+          "type": "freelance",
+          "status": "active",
+          "startDate": "2023-01-01T00:00:00.000Z",
+          "features": [
+            "local-storage",
+            "basic-writing",
+            "export-txt",
+            "up-to-1-book"
+          ]
+        },
+        "accountCreatedAt": "2023-01-01T00:00:00.000Z",
+        "lastLoginAt": "2023-10-03T12:00:00.000Z",
+        "loginCount": 25,
+        "theme": "auto",
+        "sidebarCollapsed": false,
+        "defaultView": "bookshelf",
+        "autoSave": true,
+        "autoSaveInterval": 30,
+        "preferredFontSize": 14,
+        "preferredFontFamily": "'Rubik', sans-serif",
+        "showNotifications": true,
+        "showWordCountNotifications": true,
+        "showSaveNotifications": true,
+        "defaultExportFormat": "pdf",
+        "includeMetadataInExport": true,
+        "analyticsOptIn": false,
+        "shareUsageData": false,
+        "betaFeatures": [],
+        "experimentalFeatures": [],
+        "recentBooks": ["1", "2"],
+        "recentStories": ["1", "3"],
+        "customSettings": {}
+      }
+    },
+    {
+      "description": "Example localStorage entry for books collection",
+      "key": "twain-story-builder-books-john@example.com",
+      "value": [
+        {
+          "id": 1,
+          "title": "My First Novel",
+          "subtitle": "A Journey Begins",
+          "author": "John Doe",
+          "genre": "Fiction",
+          "description": "A story about...",
+          "wordCount": 25000,
+          "targetWordCount": 80000,
+          "createdAt": "2023-01-01T00:00:00.000Z",
+          "updatedAt": "2023-10-03T12:00:00.000Z",
+          "isSeries": false,
+          "contributors": []
+        }
+      ]
+    },
+    {
+      "description": "Example localStorage entry for book chapters",
+      "key": "twain-book-chapters-1-john@example.com",
+      "value": [
+        {
+          "id": "ch_1",
+          "title": "Chapter 1: The Beginning",
+          "content": "{\"ops\":[{\"insert\":\"It was a dark and stormy night...\\n\"}]}",
+          "createdAt": "2023-01-01T00:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}
