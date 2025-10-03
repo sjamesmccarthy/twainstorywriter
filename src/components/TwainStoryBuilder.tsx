@@ -30,7 +30,6 @@ import SimCardDownloadOutlinedIcon from "@mui/icons-material/SimCardDownloadOutl
 import DeleteForeverOutlinedIcon from "@mui/icons-material/DeleteForeverOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
-import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -334,6 +333,11 @@ const TwainStoryBuilder: React.FC = () => {
     isStory: boolean;
   } | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [showStoryOptionsModal, setShowStoryOptionsModal] = useState(false);
+  const [selectedStoryForOptions, setSelectedStoryForOptions] =
+    useState<Book | null>(null);
+  const [storyOptionsTitle, setStoryOptionsTitle] = useState("");
+  const [storyOptionsMoveToBook, setStoryOptionsMoveToBook] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use twain5.png for the login screen
@@ -2231,8 +2235,123 @@ const TwainStoryBuilder: React.FC = () => {
     }
   };
 
-  const handleDeleteStory = (story: Book) => {
-    handleOpenDeleteModal(story, true);
+  const handleStoryOptions = (story: Book) => {
+    setSelectedStoryForOptions(story);
+    setStoryOptionsTitle(story.title);
+    setStoryOptionsMoveToBook("");
+    setShowStoryOptionsModal(true);
+  };
+
+  const handleCloseStoryOptionsModal = () => {
+    setShowStoryOptionsModal(false);
+    setSelectedStoryForOptions(null);
+    setStoryOptionsTitle("");
+    setStoryOptionsMoveToBook("");
+  };
+
+  const handleUpdateStoryOptions = () => {
+    if (!selectedStoryForOptions || !session?.user?.email) return;
+
+    // Update story title if changed
+    if (
+      storyOptionsTitle.trim() &&
+      storyOptionsTitle !== selectedStoryForOptions.title
+    ) {
+      const updatedStory = {
+        ...selectedStoryForOptions,
+        title: storyOptionsTitle.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedQuickStories = quickStories.map((s) =>
+        s.id === selectedStoryForOptions.id ? updatedStory : s
+      );
+      setQuickStories(updatedQuickStories);
+      saveQuickStoriesToStorage(updatedQuickStories, session.user.email);
+      setSelectedStoryForOptions(updatedStory);
+    }
+
+    // Move to book if selected
+    if (storyOptionsMoveToBook) {
+      handleMoveStoryToBook();
+      return;
+    }
+
+    showNotification("Story updated successfully!");
+    handleCloseStoryOptionsModal();
+  };
+
+  const handleMoveStoryToBook = async () => {
+    if (
+      !selectedStoryForOptions ||
+      !session?.user?.email ||
+      !storyOptionsMoveToBook
+    )
+      return;
+
+    try {
+      const targetBookId = parseInt(storyOptionsMoveToBook);
+      const targetBook = books.find((b) => b.id === targetBookId);
+
+      if (!targetBook) {
+        showNotification("Target book not found!");
+        return;
+      }
+
+      // Load story content from localStorage
+      const storyContentKey = `twain-quickstory-stories-${selectedStoryForOptions.id}-${session.user.email}`;
+      const storedStoryContent = localStorage.getItem(storyContentKey);
+
+      if (!storedStoryContent) {
+        showNotification("Story content not found!");
+        return;
+      }
+
+      const storyContent = JSON.parse(storedStoryContent);
+
+      // Create a new chapter from the story
+      const chaptersKey = `twain-book-chapters-${targetBookId}-${session.user.email}`;
+      const existingChapters = localStorage.getItem(chaptersKey);
+      const chapters = existingChapters ? JSON.parse(existingChapters) : [];
+
+      const newChapter = {
+        id: Date.now().toString(),
+        title: storyOptionsTitle.trim() || selectedStoryForOptions.title,
+        content:
+          storyContent.length > 0
+            ? JSON.stringify(storyContent[0].content)
+            : '{"ops":[]}',
+        createdAt: new Date().toISOString(),
+      };
+
+      chapters.push(newChapter);
+      localStorage.setItem(chaptersKey, JSON.stringify(chapters));
+
+      // Remove the story from quick stories
+      const updatedQuickStories = quickStories.filter(
+        (s) => s.id !== selectedStoryForOptions.id
+      );
+      setQuickStories(updatedQuickStories);
+      saveQuickStoriesToStorage(updatedQuickStories, session.user.email);
+
+      // Clean up story data
+      cleanupBookData(selectedStoryForOptions.id, session.user.email, true);
+
+      showNotification(
+        `Story moved to "${targetBook.title}" as a new chapter!`
+      );
+      handleCloseStoryOptionsModal();
+    } catch (error) {
+      console.error("Error moving story to book:", error);
+      showNotification("Failed to move story. Please try again.");
+    }
+  };
+
+  const handleDeleteStoryFromModal = () => {
+    if (selectedStoryForOptions) {
+      handleCloseStoryOptionsModal();
+      handleOpenDeleteModal(selectedStoryForOptions, true);
+    }
   };
 
   const handleWriteBook = (book: Book) => {
@@ -4701,10 +4820,10 @@ const TwainStoryBuilder: React.FC = () => {
                         >
                           {/* Only show centered icons - no additional text needed */}
                           <div className="flex items-center justify-center space-x-4">
-                            <DeleteOutlineOutlinedIcon
+                            <InfoOutlinedIcon
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteStory(storyData);
+                                handleStoryOptions(storyData);
                               }}
                               sx={{
                                 fontSize: 32,
@@ -4713,7 +4832,7 @@ const TwainStoryBuilder: React.FC = () => {
                                 transition: "transform 0.2s ease",
                                 "&:hover": {
                                   transform: "scale(1.1)",
-                                  color: "#ff6b6b",
+                                  color: "#60a5fa",
                                 },
                               }}
                             />
@@ -5231,6 +5350,150 @@ const TwainStoryBuilder: React.FC = () => {
                   }}
                 >
                   Create Story
+                </Button>
+              </Box>
+            </Box>
+          </Box>
+        </Modal>
+
+        {/* Story Options Modal */}
+        <Modal
+          open={showStoryOptionsModal}
+          onClose={handleCloseStoryOptionsModal}
+          aria-labelledby="story-options-modal-title"
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              top: { xs: 0, sm: "50%" },
+              left: { xs: 0, sm: "50%" },
+              transform: { xs: "none", sm: "translate(-50%, -50%)" },
+              width: { xs: "100%", sm: 500 },
+              height: { xs: "100vh", sm: "auto" },
+              bgcolor: "background.paper",
+              borderRadius: { xs: 0, sm: 3 },
+              overflow: "hidden",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+              display: { xs: "flex", sm: "block" },
+              flexDirection: { xs: "column", sm: "row" },
+            }}
+          >
+            {/* Header with same background as page header */}
+            <Box
+              sx={{
+                backgroundColor: "rgb(38, 52, 63)",
+                color: "white",
+                p: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Typography
+                id="story-options-modal-title"
+                variant="h6"
+                component="h2"
+                sx={{
+                  fontFamily: "'Rubik', sans-serif",
+                  fontWeight: 600,
+                  margin: 0,
+                }}
+              >
+                Story Options
+              </Typography>
+              <IconButton
+                onClick={handleCloseStoryOptionsModal}
+                sx={{
+                  color: "white",
+                  "&:hover": {
+                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  },
+                }}
+              >
+                <CloseIcon />
+              </IconButton>
+            </Box>
+
+            {/* Modal content */}
+            <Box
+              sx={{
+                p: { xs: 3, sm: 4 },
+                flex: { xs: 1, sm: "none" },
+                display: { xs: "flex", sm: "block" },
+                flexDirection: { xs: "column", sm: "row" },
+                justifyContent: { xs: "center", sm: "flex-start" },
+              }}
+            >
+              <TextField
+                fullWidth
+                label="Story Title"
+                value={storyOptionsTitle}
+                onChange={(e) => setStoryOptionsTitle(e.target.value)}
+                variant="outlined"
+                sx={{ mb: 3 }}
+                autoFocus
+              />
+
+              <FormControl fullWidth sx={{ mb: 4 }}>
+                <InputLabel>Move to Book (Optional)</InputLabel>
+                <Select
+                  value={storyOptionsMoveToBook}
+                  label="Move to Book (Optional)"
+                  onChange={(e) => setStoryOptionsMoveToBook(e.target.value)}
+                >
+                  <MenuItem value="">
+                    <em>None - Keep as Story</em>
+                  </MenuItem>
+                  {books.map((book) => (
+                    <MenuItem key={book.id} value={book.id.toString()}>
+                      {book.title}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 2,
+                  justifyContent: "space-between",
+                }}
+              >
+                <Button
+                  onClick={handleDeleteStoryFromModal}
+                  variant="outlined"
+                  color="error"
+                  sx={{
+                    flex: 1,
+                    boxShadow: "none",
+                    "&:hover": {
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  Delete
+                </Button>
+                <Button
+                  onClick={handleUpdateStoryOptions}
+                  variant="contained"
+                  disabled={!storyOptionsTitle.trim()}
+                  sx={{
+                    flex: 1,
+                    backgroundColor: "rgb(19, 135, 194)",
+                    textTransform: "none",
+                    fontFamily: "'Rubik', sans-serif",
+                    py: 1.5,
+                    boxShadow: "none",
+                    "&:hover": {
+                      backgroundColor: "rgb(15, 108, 155)",
+                      boxShadow: "none",
+                    },
+                    "&:disabled": {
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  Update
                 </Button>
               </Box>
             </Box>
